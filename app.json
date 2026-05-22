@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "ExpensApp",
+    "slug": "expensapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.example.expensapp"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
+  }
+}
