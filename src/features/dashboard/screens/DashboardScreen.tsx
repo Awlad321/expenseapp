@@ -82,9 +82,9 @@ export function DashboardScreen({ navigation }: Props) {
           </View>
         </View>
         <View style={styles.balanceRow}>
-          <Metric label="Income" value={formatMoney(summary.totalIncome)} color={colors.income} />
-          <Metric label="Expense" value={formatMoney(summary.totalExpense)} color={colors.expense} />
-          <Metric label="Savings" value={formatMoney(summary.monthlySavings)} color={colors.accent} />
+          <Metric label="Usable" value={formatMoney(summary.totalBalance)} color={colors.income} />
+          <Metric label="Card debt" value={formatMoney(summary.totalCreditCardDebt ?? 0)} color={colors.expense} />
+          <Metric label="Net" value={formatMoney(summary.netPosition ?? summary.totalBalance)} color={colors.accent} />
         </View>
       </LinearGradient>
 

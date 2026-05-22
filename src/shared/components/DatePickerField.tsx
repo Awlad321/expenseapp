@@ -78,19 +78,21 @@ export function DatePickerField({ label, value, onChange, error }: DatePickerFie
                   <Pressable
                     key={dateValue}
                     onPress={() => selectDate(date)}
-                    style={[styles.day, selected && styles.selectedDay, isToday && !selected && styles.todayDay]}
+                    style={styles.day}
                   >
-                    <AppText
-                      variant="small"
-                      style={[
-                        styles.dayText,
-                        !currentMonth && styles.mutedDayText,
-                        selected && styles.selectedDayText,
-                        isToday && !selected && styles.todayDayText,
-                      ]}
-                    >
-                      {date.getDate()}
-                    </AppText>
+                    <View style={[styles.dayBadge, selected && styles.selectedDay, isToday && !selected && styles.todayDay]}>
+                      <AppText
+                        variant="small"
+                        style={[
+                          styles.dayText,
+                          !currentMonth && styles.mutedDayText,
+                          selected && styles.selectedDayText,
+                          isToday && !selected && styles.todayDayText,
+                        ]}
+                      >
+                        {date.getDate()}
+                      </AppText>
+                    </View>
                   </Pressable>
                 );
               })}
@@ -210,12 +212,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  dayBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   selectedDay: {
-    borderRadius: radius.md,
     backgroundColor: colors.primary,
   },
   todayDay: {
-    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.primary,
   },

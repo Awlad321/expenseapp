@@ -1,6 +1,5 @@
-import { apiClient } from '../../../services/api/apiClient';
-import { endpoints } from '../../../services/api/endpoints';
-import type { Account, AccountLedger, AccountType } from '../../../shared/types/api';
+import { localDatabase } from '../../../services/api/localDatabase';
+import type { AccountType } from '../../../shared/types/api';
 
 export interface AccountPayload {
   name: string;
@@ -10,23 +9,18 @@ export interface AccountPayload {
 
 export const accountService = {
   async list() {
-    const { data } = await apiClient.get<Account[]>(endpoints.accounts);
-    return data;
+    return localDatabase.listAccounts();
   },
   async create(payload: AccountPayload) {
-    const { data } = await apiClient.post<Account>(endpoints.accounts, payload);
-    return data;
+    return localDatabase.createAccount(payload);
   },
   async update(id: number, payload: AccountPayload) {
-    const { data } = await apiClient.put<Account>(`${endpoints.accounts}/${id}`, payload);
-    return data;
+    return localDatabase.updateAccount(id, payload);
   },
   async ledger(id: number) {
-    const { data } = await apiClient.get<AccountLedger[]>(`${endpoints.accounts}/${id}/ledger`);
-    return data;
+    return localDatabase.listLedger(id);
   },
   async deactivate(id: number) {
-    const { data } = await apiClient.patch<Account>(`${endpoints.accounts}/${id}/deactivate`);
-    return data;
+    return localDatabase.deactivateAccount(id);
   },
 };

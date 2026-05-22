@@ -30,10 +30,15 @@ export type ReportsStackParamList = {
   ReportsHome: undefined;
 };
 
+export type CreditCardsStackParamList = {
+  CreditCardsHome: undefined;
+};
+
 export type AppTabParamList = {
   Dashboard: NavigatorScreenParams<DashboardStackParamList>;
   Transactions: NavigatorScreenParams<TransactionsStackParamList>;
   Transfer: NavigatorScreenParams<TransfersStackParamList>;
   Accounts: NavigatorScreenParams<AccountsStackParamList>;
+  Cards: NavigatorScreenParams<CreditCardsStackParamList>;
   Reports: NavigatorScreenParams<ReportsStackParamList>;
 };

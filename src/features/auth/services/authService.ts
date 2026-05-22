@@ -1,6 +1,4 @@
-import { apiClient } from '../../../services/api/apiClient';
-import { endpoints } from '../../../services/api/endpoints';
-import type { AuthResponse, User } from '../../../shared/types/api';
+import { localDatabase } from '../../../services/api/localDatabase';
 
 export interface LoginPayload {
   email: string;
@@ -13,15 +11,12 @@ export interface RegisterPayload extends LoginPayload {
 
 export const authService = {
   async login(payload: LoginPayload) {
-    const { data } = await apiClient.post<AuthResponse>(endpoints.auth.login, payload);
-    return data;
+    return localDatabase.login(payload);
   },
   async register(payload: RegisterPayload) {
-    const { data } = await apiClient.post<AuthResponse>(endpoints.auth.register, payload);
-    return data;
+    return localDatabase.register(payload);
   },
   async me() {
-    const { data } = await apiClient.get<User>(endpoints.auth.me);
-    return data;
+    return localDatabase.me();
   },
 };

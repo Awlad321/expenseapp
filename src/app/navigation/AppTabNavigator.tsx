@@ -7,6 +7,7 @@ import { TransactionsNavigator } from './TransactionsNavigator';
 import { TransfersNavigator } from './TransfersNavigator';
 import { AccountsNavigator } from './AccountsNavigator';
 import { ReportsNavigator } from './ReportsNavigator';
+import { CreditCardsNavigator } from './CreditCardsNavigator';
 import { colors } from '../../shared/theme/theme';
 
 const Tab = createBottomTabNavigator<AppTabParamList>();
@@ -16,6 +17,7 @@ const icons = {
   Transactions: 'receipt-outline',
   Transfer: 'swap-horizontal-outline',
   Accounts: 'wallet-outline',
+  Cards: 'card-outline',
   Reports: 'stats-chart-outline',
 } as const;
 
@@ -50,6 +52,7 @@ export function AppTabNavigator() {
       <Tab.Screen name="Transactions" component={TransactionsNavigator} />
       <Tab.Screen name="Transfer" component={TransfersNavigator} />
       <Tab.Screen name="Accounts" component={AccountsNavigator} />
+      <Tab.Screen name="Cards" component={CreditCardsNavigator} />
       <Tab.Screen name="Reports" component={ReportsNavigator} />
     </Tab.Navigator>
   );

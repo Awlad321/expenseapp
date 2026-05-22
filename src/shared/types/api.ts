@@ -3,6 +3,7 @@ export type CategoryType = 'INCOME' | 'EXPENSE';
 export type TransactionType = 'INCOME' | 'EXPENSE';
 export type LedgerDirection = 'CREDIT' | 'DEBIT';
 export type LedgerReferenceType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TRANSFER_FEE' | 'OPENING_BALANCE' | 'MANUAL_ADJUSTMENT';
+export type CreditCardActivityType = 'SPEND' | 'PAYMENT' | 'ADJUSTMENT';
 
 export interface User {
   id: number;
@@ -38,6 +39,35 @@ export interface AccountLedger {
   amount: number;
   balanceAfter: number;
   description?: string | null;
+  createdAt: string;
+}
+
+export interface CreditCard {
+  id: number;
+  userId: number;
+  name: string;
+  creditLimit: number;
+  outstandingBalance: number;
+  billingDay?: number | null;
+  dueDay?: number | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreditCardActivity {
+  id: number;
+  cardId: number;
+  cardName: string;
+  type: CreditCardActivityType;
+  categoryId?: number | null;
+  categoryName?: string | null;
+  amount: number;
+  activityDate: string;
+  sourceAccountId?: number | null;
+  sourceAccountName?: string | null;
+  balanceAfter: number;
+  note?: string | null;
   createdAt: string;
 }
 
@@ -88,6 +118,8 @@ export interface DashboardSummary {
   totalExpense: number;
   monthlySavings: number;
   totalBalance: number;
+  totalCreditCardDebt?: number;
+  netPosition?: number;
   previousMonthIncome: number;
   previousMonthExpense: number;
   accountBalances: Array<{ accountId: number; accountName: string; type: string; balance: number }>;

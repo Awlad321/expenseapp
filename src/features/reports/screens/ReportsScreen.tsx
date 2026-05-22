@@ -10,6 +10,7 @@ import { Screen } from '../../../shared/components/Screen';
 import { colors, spacing } from '../../../shared/theme/theme';
 import { currentMonth, formatMoney } from '../../../shared/utils/format';
 import type { DashboardSummary } from '../../../shared/types/api';
+import { backupService } from '../../../services/api/backupService';
 import { dashboardService } from '../../dashboard/services/dashboardService';
 import { transactionService } from '../../transactions/services/transactionService';
 
@@ -19,6 +20,7 @@ export function ReportsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [backupBusy, setBackupBusy] = useState(false);
 
   async function load() {
     try {
@@ -58,10 +60,56 @@ export function ReportsScreen() {
     }
   }
 
+  async function configureBackup() {
+    setBackupBusy(true);
+    try {
+      await backupService.configureFolder();
+      Alert.alert('Backup enabled', 'ExpensApp will write a backup after 3 AM when the app is opened or running.');
+    } catch {
+      Alert.alert('Backup setup failed', 'Could not access the selected backup folder.');
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
+  async function backupNow() {
+    setBackupBusy(true);
+    try {
+      const fileName = await backupService.backupNow();
+      Alert.alert('Backup created', fileName);
+    } catch {
+      Alert.alert('Backup failed', 'Choose a backup folder first, then try again.');
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
+  async function restoreBackup() {
+    setBackupBusy(true);
+    try {
+      await backupService.restoreLatestFromFolder();
+      await load();
+      Alert.alert('Data restored', 'The latest ExpensApp backup from the selected folder was restored.');
+    } catch {
+      Alert.alert('Restore failed', 'No valid ExpensApp backup was found in the selected folder.');
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
       <Header title="Reports" subtitle="Monthly finance overview" />
       <PrimaryButton loading={exporting} onPress={exportCsv}>Export CSV</PrimaryButton>
+      <Card>
+        <AppText variant="h2">Data backup</AppText>
+        <AppText muted>Choose a phone folder outside the app. Daily backup runs after 3 AM when the app is opened or running.</AppText>
+        <View style={styles.backupActions}>
+          <PrimaryButton loading={backupBusy} onPress={configureBackup} style={styles.backupButton}>Choose Folder</PrimaryButton>
+          <PrimaryButton variant="ghost" loading={backupBusy} onPress={backupNow} style={styles.backupButton}>Backup Now</PrimaryButton>
+        </View>
+        <PrimaryButton variant="ghost" loading={backupBusy} onPress={restoreBackup}>Restore Latest Backup</PrimaryButton>
+      </Card>
       {loading ? <ActivityIndicator color={colors.primary} /> : null}
       {summary ? (
         <>
@@ -161,5 +209,12 @@ const styles = StyleSheet.create({
   fill: {
     height: 10,
     borderRadius: 10,
+  },
+  backupActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  backupButton: {
+    flex: 1,
   },
 });

@@ -1,6 +1,5 @@
-import { apiClient } from '../../../services/api/apiClient';
-import { endpoints } from '../../../services/api/endpoints';
-import type { Transaction, TransactionType } from '../../../shared/types/api';
+import { localDatabase } from '../../../services/api/localDatabase';
+import type { TransactionType } from '../../../shared/types/api';
 
 export interface TransactionPayload {
   accountId: number;
@@ -12,25 +11,18 @@ export interface TransactionPayload {
 
 export const transactionService = {
   async list(params?: { type?: TransactionType; month?: string }) {
-    const { data } = await apiClient.get<Transaction[]>(endpoints.transactions, { params });
-    return data;
+    return localDatabase.listTransactions(params);
   },
   async exportCsv(month: string) {
-    const { data } = await apiClient.get<string>(`${endpoints.transactions}/export`, {
-      params: { month },
-      responseType: 'text',
-    });
-    return data;
+    return localDatabase.exportCsv(month);
   },
   async createIncome(payload: TransactionPayload) {
-    const { data } = await apiClient.post<Transaction>(endpoints.income, payload);
-    return data;
+    return localDatabase.createIncome(payload);
   },
   async createExpense(payload: TransactionPayload) {
-    const { data } = await apiClient.post<Transaction>(endpoints.expense, payload);
-    return data;
+    return localDatabase.createExpense(payload);
   },
   async remove(id: number) {
-    await apiClient.delete(`${endpoints.transactions}/${id}`);
+    await localDatabase.removeTransaction(id);
   },
 };
