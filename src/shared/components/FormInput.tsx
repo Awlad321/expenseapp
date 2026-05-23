@@ -1,6 +1,7 @@
 import { TextInput, StyleSheet, TextInputProps, View } from 'react-native';
 import { colors, radius, spacing } from '../theme/theme';
 import { AppText } from './AppText';
+import { useTheme } from '../theme/ThemeContext';
 
 interface FormInputProps extends TextInputProps {
   label: string;
@@ -8,15 +9,20 @@ interface FormInputProps extends TextInputProps {
 }
 
 export function FormInput({ label, error, ...props }: FormInputProps) {
+  const theme = useTheme();
   return (
     <View style={styles.wrap}>
       <AppText variant="small" muted>{label}</AppText>
       <TextInput
-        placeholderTextColor={colors.textMuted}
-        style={[styles.input, error && styles.inputError]}
+        placeholderTextColor={theme.colors.textMuted}
+        style={[
+          styles.input,
+          { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, color: theme.colors.text },
+          error && { borderColor: theme.colors.danger },
+        ]}
         {...props}
       />
-      {error ? <AppText variant="small" style={styles.error}>{error}</AppText> : null}
+      {error ? <AppText variant="small" style={{ color: theme.colors.danger }}>{error}</AppText> : null}
     </View>
   );
 }

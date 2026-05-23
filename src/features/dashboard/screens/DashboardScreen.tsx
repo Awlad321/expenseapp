@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
@@ -12,11 +12,14 @@ import { Header } from '../../../shared/components/Header';
 import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
 import { colors, radius, spacing } from '../../../shared/theme/theme';
+import { useTheme } from '../../../shared/theme/ThemeContext';
 import { currentMonth, formatMoney } from '../../../shared/utils/format';
 import type { DashboardSummary } from '../../../shared/types/api';
 import { dashboardService } from '../services/dashboardService';
 
 type Props = NativeStackScreenProps<DashboardStackParamList, 'DashboardHome'>;
+
+const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const fallback: DashboardSummary = {
   month: currentMonth(),
@@ -34,16 +37,20 @@ const fallback: DashboardSummary = {
 
 export function DashboardScreen({ navigation }: Props) {
   const { user, signOut } = useAuth();
+  const theme = useTheme();
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth());
+  const [monthPickerVisible, setMonthPickerVisible] = useState(false);
+  const [pickerYear, setPickerYear] = useState(() => Number(currentMonth().slice(0, 4)));
   const [summary, setSummary] = useState<DashboardSummary>(fallback);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  async function load() {
+  async function load(month = selectedMonth) {
     try {
-      const data = await dashboardService.summary(currentMonth());
+      const data = await dashboardService.summary(month);
       setSummary(data);
     } catch {
-      setSummary(fallback);
+      setSummary({ ...fallback, month });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -57,7 +64,19 @@ export function DashboardScreen({ navigation }: Props) {
 
   useFocusEffect(useCallback(() => {
     load();
-  }, []));
+  }, [selectedMonth]));
+
+  async function selectMonth(month: string) {
+    setSelectedMonth(month);
+    setMonthPickerVisible(false);
+    setLoading(true);
+    await load(month);
+  }
+
+  function openMonthPicker() {
+    setPickerYear(Number(selectedMonth.slice(0, 4)));
+    setMonthPickerVisible(true);
+  }
 
   if (loading) {
     return (
@@ -70,42 +89,48 @@ export function DashboardScreen({ navigation }: Props) {
   return (
     <Screen style={styles.screen} refreshing={refreshing} onRefresh={refresh}>
       <Header title="Dashboard" subtitle={`Hi ${user?.name ?? 'there'}`} rightIcon="log-out-outline" onRightPress={signOut} />
-      <LinearGradient colors={['#1B7A59', '#0E343B', '#111B23']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.balanceCard}>
+      <LinearGradient
+        colors={theme.scheme === 'dark' ? ['#1B7A59', '#0E343B', '#111B23'] : ['#DDFBF0', '#BFEFE0', '#F8FFFC']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.balanceCard, { borderColor: theme.colors.borderStrong }]}
+      >
         <View style={styles.heroTop}>
           <View>
-            <AppText variant="small" style={styles.heroLabel}>Total portfolio</AppText>
+            <AppText variant="small" style={{ color: theme.scheme === 'dark' ? 'rgba(244,251,248,0.74)' : theme.colors.textMuted }}>Total balance</AppText>
             <AppText variant="title">{formatMoney(summary.totalBalance)}</AppText>
           </View>
-          <View style={styles.monthPill}>
-            <Ionicons name="calendar-outline" size={15} color={colors.text} />
-            <AppText variant="small">{summary.month}</AppText>
-          </View>
+          <Pressable onPress={openMonthPicker} style={[styles.monthPill, { backgroundColor: theme.scheme === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(20,158,110,0.12)' }]}>
+            <Ionicons name="calendar-outline" size={15} color={theme.colors.text} />
+            <AppText variant="small">{formatMonthLabel(summary.month)}</AppText>
+            <Ionicons name="chevron-down" size={14} color={theme.colors.text} />
+          </Pressable>
         </View>
         <View style={styles.balanceRow}>
-          <Metric label="Usable" value={formatMoney(summary.totalBalance)} color={colors.income} />
-          <Metric label="Card debt" value={formatMoney(summary.totalCreditCardDebt ?? 0)} color={colors.expense} />
-          <Metric label="Net" value={formatMoney(summary.netPosition ?? summary.totalBalance)} color={colors.accent} />
+          <Metric label="Income" value={formatMoney(summary.totalIncome)} color={theme.colors.income} backgroundColor={theme.scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)'} />
+          <Metric label="Expense" value={formatMoney(summary.totalExpense)} color={theme.colors.expense} backgroundColor={theme.scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)'} />
+          <Metric label="Savings" value={formatMoney(summary.monthlySavings)} color={summary.monthlySavings >= 0 ? theme.colors.accent : theme.colors.expense} backgroundColor={theme.scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)'} />
         </View>
       </LinearGradient>
 
       <View style={styles.insightRow}>
-        <InsightCard icon="analytics-outline" label="Savings rate" value={`${savingsRate(summary.totalIncome, summary.monthlySavings)}%`} tone={colors.accent} />
-        <InsightCard icon="trending-up-outline" label="MoM expense" value={monthDelta(summary.previousMonthExpense, summary.totalExpense)} tone={summary.totalExpense > summary.previousMonthExpense ? colors.expense : colors.income} />
+        <InsightCard icon="analytics-outline" label="Savings rate" value={`${savingsRate(summary.totalIncome, summary.monthlySavings)}%`} tone={theme.colors.accent} />
+        <InsightCard icon="trending-up-outline" label="MoM expense" value={monthDelta(summary.previousMonthExpense, summary.totalExpense)} tone={summary.totalExpense > summary.previousMonthExpense ? theme.colors.expense : theme.colors.income} />
       </View>
 
       <View style={styles.quickRow}>
-        <QuickAction icon="add-circle-outline" label="Income" color={colors.income} onPress={() => navigation.getParent()?.navigate('Transactions', { screen: 'AddIncome' })} />
-        <QuickAction icon="remove-circle-outline" label="Expense" color={colors.expense} onPress={() => navigation.getParent()?.navigate('Transactions', { screen: 'AddExpense' })} />
-        <QuickAction icon="swap-horizontal-outline" label="Transfer" color={colors.transfer} onPress={() => navigation.getParent()?.navigate('Transfer', { screen: 'AddTransfer' })} />
+        <QuickAction icon="add-circle-outline" label="Income" color={theme.colors.income} onPress={() => navigation.getParent()?.navigate('Transactions', { screen: 'AddIncome' })} />
+        <QuickAction icon="remove-circle-outline" label="Expense" color={theme.colors.expense} onPress={() => navigation.getParent()?.navigate('Transactions', { screen: 'AddExpense' })} />
+        <QuickAction icon="swap-horizontal-outline" label="Transfer" color={theme.colors.transfer} onPress={() => navigation.getParent()?.navigate('Transfer', { screen: 'AddTransfer' })} />
       </View>
 
       <Card>
-        <SectionHeader title="Accounts" action="View all" />
+        <SectionHeader title="Accounts" action="View all" onAction={() => navigation.getParent()?.navigate('Accounts', { screen: 'AccountsHome' })} />
         {summary.accountBalances.length === 0 ? <AppText muted>Add Cash, Bank, or Wallet accounts to see balances.</AppText> : summary.accountBalances.map((account) => (
-          <View key={account.accountId} style={styles.accountTile}>
+          <View key={account.accountId} style={[styles.accountTile, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.rowLeft}>
-              <View style={styles.accountIcon}>
-                <Ionicons name={account.type === 'BANK' ? 'business-outline' : account.type === 'CASH' ? 'cash-outline' : 'wallet-outline'} size={20} color={accountColor(account.type)} />
+              <View style={[styles.accountIcon, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <Ionicons name={account.type === 'BANK' ? 'business-outline' : account.type === 'CASH' ? 'cash-outline' : 'wallet-outline'} size={20} color={accountColor(account.type, theme.colors)} />
               </View>
               <View>
                 <AppText>{account.accountName}</AppText>
@@ -147,15 +172,54 @@ export function DashboardScreen({ navigation }: Props) {
         ))}
         {summary.recentTransactions.length === 0 ? <AppText muted>No recent transactions.</AppText> : null}
       </Card>
+
+      <Modal visible={monthPickerVisible} transparent animationType="fade" onRequestClose={() => setMonthPickerVisible(false)}>
+        <View style={[styles.backdrop, { backgroundColor: theme.scheme === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(7,17,19,0.28)' }]}>
+          <View style={[styles.monthPanel, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <View style={styles.monthPickerHeader}>
+              <Pressable onPress={() => setPickerYear((year) => year - 1)} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <Ionicons name="chevron-back" size={22} color={theme.colors.text} />
+              </Pressable>
+              <AppText variant="h2">{pickerYear}</AppText>
+              <Pressable onPress={() => setPickerYear((year) => year + 1)} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <Ionicons name="chevron-forward" size={22} color={theme.colors.text} />
+              </Pressable>
+            </View>
+            <View style={styles.monthGrid}>
+              {monthNames.map((name, index) => {
+                const month = `${pickerYear}-${String(index + 1).padStart(2, '0')}`;
+                const selected = selectedMonth === month;
+                return (
+                  <Pressable key={month} onPress={() => selectMonth(month)} style={[styles.monthOption, { backgroundColor: selected ? theme.colors.primary : theme.colors.surface }]}>
+                    <AppText variant="small" style={{ color: selected ? theme.colors.background : theme.colors.text, fontWeight: selected ? '800' : '600' }}>{name}</AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={styles.monthPickerActions}>
+              <Pressable onPress={() => selectMonth(currentMonth())} style={[styles.monthActionButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <AppText variant="small" style={{ color: theme.colors.primary }}>This month</AppText>
+              </Pressable>
+              <Pressable onPress={() => setMonthPickerVisible(false)} style={[styles.monthActionButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <AppText variant="small">Cancel</AppText>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
 
-function SectionHeader({ title, action }: { title: string; action?: string }) {
+function SectionHeader({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
   return (
     <View style={styles.sectionHeader}>
       <AppText variant="h2">{title}</AppText>
-      {action ? <AppText variant="small" style={styles.actionText}>{action}</AppText> : null}
+      {action ? (
+        <Pressable onPress={onAction} hitSlop={8}>
+          <AppText variant="small" style={styles.actionText}>{action}</AppText>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -188,9 +252,9 @@ function CategoryBar({ label, amount, max }: { label: string; amount: number; ma
   );
 }
 
-function Metric({ label, value, color }: { label: string; value: string; color: string }) {
+function Metric({ label, value, color, backgroundColor }: { label: string; value: string; color: string; backgroundColor: string }) {
   return (
-    <View style={styles.metric}>
+    <View style={[styles.metric, { backgroundColor }]}>
       <AppText variant="small" muted>{label}</AppText>
       <AppText style={{ color }}>{value}</AppText>
     </View>
@@ -220,11 +284,17 @@ function monthDelta(previous: number, current: number) {
   return `${delta > 0 ? '+' : ''}${delta}%`;
 }
 
-function accountColor(type: string) {
-  if (type === 'BANK') return colors.bank;
-  if (type === 'CASH') return colors.cash;
-  if (type === 'WALLET') return colors.wallet;
-  return colors.primary;
+function formatMonthLabel(month: string) {
+  const [year, monthValue] = month.split('-');
+  const index = Number(monthValue) - 1;
+  return `${monthNames[index] ?? monthValue} ${year}`;
+}
+
+function accountColor(type: string, palette: typeof colors) {
+  if (type === 'BANK') return palette.bank;
+  if (type === 'CASH') return palette.cash;
+  if (type === 'WALLET') return palette.wallet;
+  return palette.primary;
 }
 
 const styles = StyleSheet.create({
@@ -248,9 +318,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
   },
-  heroLabel: {
-    color: 'rgba(244,251,248,0.74)',
-  },
   monthPill: {
     height: 34,
     borderRadius: 17,
@@ -258,7 +325,55 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: spacing.xs,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+  },
+  backdrop: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: spacing.lg,
+    backgroundColor: 'rgba(0,0,0,0.72)',
+  },
+  monthPanel: {
+    gap: spacing.lg,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    padding: spacing.lg,
+  },
+  monthPickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  iconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  monthOption: {
+    width: '30.8%',
+    minHeight: 46,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  monthPickerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+  },
+  monthActionButton: {
+    minHeight: 40,
+    borderRadius: radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
   },
   balanceRow: {
     flexDirection: 'row',
@@ -269,7 +384,6 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     borderRadius: radius.md,
     padding: spacing.md,
-    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   insightRow: {
     flexDirection: 'row',
@@ -336,7 +450,6 @@ const styles = StyleSheet.create({
   accountTile: {
     borderRadius: radius.md,
     padding: spacing.md,
-    backgroundColor: colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -348,7 +461,6 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceMuted,
   },
   activityIcon: {
     width: 38,

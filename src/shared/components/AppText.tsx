@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { StyleProp, StyleSheet, Text, TextStyle } from 'react-native';
 import { colors, typography } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 
 interface AppTextProps {
   children: ReactNode;
@@ -10,7 +11,8 @@ interface AppTextProps {
 }
 
 export function AppText({ children, variant = 'body', muted, style }: AppTextProps) {
-  return <Text style={[styles.base, styles[variant], muted && styles.muted, style]}>{children}</Text>;
+  const theme = useTheme();
+  return <Text style={[styles.base, { color: muted ? theme.colors.textMuted : theme.colors.text }, styles[variant], style]}>{children}</Text>;
 }
 
 const styles = StyleSheet.create({

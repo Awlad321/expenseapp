@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppText } from './AppText';
 import { colors, spacing } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 
 interface HeaderProps {
   title: string;
@@ -11,6 +12,7 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle, rightIcon, onRightPress }: HeaderProps) {
+  const theme = useTheme();
   return (
     <View style={styles.header}>
       <View style={styles.copy}>
@@ -18,8 +20,8 @@ export function Header({ title, subtitle, rightIcon, onRightPress }: HeaderProps
         {subtitle ? <AppText muted>{subtitle}</AppText> : null}
       </View>
       {rightIcon ? (
-        <Pressable onPress={onRightPress} style={styles.iconButton}>
-          <Ionicons name={rightIcon} size={22} color={colors.text} />
+        <Pressable onPress={onRightPress} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+          <Ionicons name={rightIcon} size={22} color={theme.colors.text} />
         </Pressable>
       ) : null}
     </View>

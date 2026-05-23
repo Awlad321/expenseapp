@@ -111,8 +111,8 @@ function ChoiceRow({ title, accounts, selectedId, onSelect }: { title: string; a
         {accounts.map((account) => {
           const selected = selectedId === account.id;
           return (
-            <PrimaryButton key={account.id} variant={selected ? 'primary' : 'ghost'} onPress={() => onSelect(account.id)} style={styles.chip}>
-              <AppText variant="small" style={{ color: selected ? colors.background : colors.text }}>{account.name}</AppText>
+            <PrimaryButton compact key={account.id} variant={selected ? 'primary' : 'ghost'} onPress={() => onSelect(account.id)} style={styles.chip}>
+              {account.name}
             </PrimaryButton>
           );
         })}

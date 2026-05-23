@@ -1,4 +1,6 @@
-export const colors = {
+import { Appearance } from 'react-native';
+
+export const darkColors = {
   background: '#071113',
   backgroundElevated: '#0B171A',
   surface: '#101B1E',
@@ -22,6 +24,44 @@ export const colors = {
   bank: '#6EE7B7',
   wallet: '#A78BFA',
 };
+
+export const lightColors: typeof darkColors = {
+  background: '#F6FAF8',
+  backgroundElevated: '#FFFFFF',
+  surface: '#FFFFFF',
+  surfaceMuted: '#E9F1EE',
+  card: '#FFFFFF',
+  cardSoft: '#EFF7F3',
+  cardGlass: 'rgba(7,17,19,0.05)',
+  text: '#071113',
+  textMuted: '#5F706C',
+  border: 'rgba(7,17,19,0.10)',
+  borderStrong: 'rgba(7,17,19,0.18)',
+  primary: '#149E6E',
+  primaryDark: '#0C7953',
+  accent: '#0284C7',
+  warning: '#B7791F',
+  danger: '#DC2626',
+  income: '#059669',
+  expense: '#DC2626',
+  transfer: '#0284C7',
+  cash: '#B7791F',
+  bank: '#047857',
+  wallet: '#7C3AED',
+};
+
+export type AppColors = typeof darkColors;
+export type ThemePreference = 'system' | 'light' | 'dark';
+
+export function resolveThemePreference(preference: ThemePreference) {
+  if (preference === 'system') {
+    return Appearance.getColorScheme() === 'light' ? 'light' : 'dark';
+  }
+  return preference;
+}
+
+export const isDarkMode = resolveThemePreference('system') === 'dark';
+export const colors = isDarkMode ? darkColors : lightColors;
 
 export const spacing = {
   xs: 4,

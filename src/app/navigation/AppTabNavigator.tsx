@@ -8,7 +8,7 @@ import { TransfersNavigator } from './TransfersNavigator';
 import { AccountsNavigator } from './AccountsNavigator';
 import { ReportsNavigator } from './ReportsNavigator';
 import { CreditCardsNavigator } from './CreditCardsNavigator';
-import { colors } from '../../shared/theme/theme';
+import { useTheme } from '../../shared/theme/ThemeContext';
 
 const Tab = createBottomTabNavigator<AppTabParamList>();
 
@@ -23,6 +23,7 @@ const icons = {
 
 export function AppTabNavigator() {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const bottomInset = Math.max(insets.bottom, 24);
 
   return (

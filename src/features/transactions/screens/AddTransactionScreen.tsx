@@ -12,6 +12,7 @@ import { Header } from '../../../shared/components/Header';
 import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
 import { colors, radius, spacing } from '../../../shared/theme/theme';
+import { useTheme } from '../../../shared/theme/ThemeContext';
 import { today } from '../../../shared/utils/format';
 import type { Account, Category, TransactionType } from '../../../shared/types/api';
 import { accountService } from '../../accounts/services/accountService';
@@ -31,6 +32,7 @@ type FormValues = z.infer<typeof schema>;
 type Props = NativeStackScreenProps<TransactionsStackParamList, 'AddIncome' | 'AddExpense'>;
 
 export function AddTransactionScreen({ route, navigation }: Props) {
+  const theme = useTheme();
   const type = ((route.params as { type?: TransactionType } | undefined)?.type ?? (route.name === 'AddIncome' ? 'INCOME' : 'EXPENSE')) as TransactionType;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -162,8 +164,8 @@ export function AddTransactionScreen({ route, navigation }: Props) {
       )} />
       <PrimaryButton loading={loading} onPress={handleSubmit(onSubmit)}>Save</PrimaryButton>
       <Modal visible={categoryModalVisible} transparent animationType="fade" onRequestClose={() => setCategoryModalVisible(false)}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalPanel}>
+        <View style={[styles.modalBackdrop, { backgroundColor: theme.scheme === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(7,17,19,0.28)' }]}>
+          <View style={[styles.modalPanel, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
             <View style={styles.modalHeader}>
               <AppText variant="h2">New {type === 'INCOME' ? 'income' : 'expense'} category</AppText>
               <Pressable onPress={() => setCategoryModalVisible(false)} style={styles.closeButton}>
@@ -224,8 +226,8 @@ function ChoiceRow({
         {items.map((item) => {
           const selected = selectedId === item.id;
           return (
-            <PrimaryButton key={item.id} variant={selected ? 'primary' : 'ghost'} onPress={() => onSelect(item.id)} style={styles.chip}>
-              <AppText variant="small" style={{ color: selected ? colors.background : colors.text }}>{item.label}</AppText>
+            <PrimaryButton compact key={item.id} variant={selected ? 'primary' : 'ghost'} onPress={() => onSelect(item.id)} style={styles.chip}>
+              {item.label}
             </PrimaryButton>
           );
         })}

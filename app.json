@@ -4,12 +4,22 @@
     "slug": "expensapp",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./src/assets/expnesapp_logo.png",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./src/assets/expnesapp_logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#061314"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
     "android": {
-      "package": "com.example.expensapp"
+      "package": "com.example.expensapp",
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/expnesapp_logo.png",
+        "backgroundColor": "#061314"
+      }
     },
     "plugins": [
       "expo-secure-store"

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppText } from './AppText';
 import { colors, radius, spacing } from '../theme/theme';
 import { today } from '../utils/format';
+import { useTheme } from '../theme/ThemeContext';
 
 interface DatePickerFieldProps {
   label: string;
@@ -16,6 +17,7 @@ const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 export function DatePickerField({ label, value, onChange, error }: DatePickerFieldProps) {
+  const theme = useTheme();
   const [visible, setVisible] = useState(false);
   const selectedDate = parseDate(value) ?? parseDate(today())!;
   const [visibleMonth, setVisibleMonth] = useState(() => new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
@@ -37,27 +39,27 @@ export function DatePickerField({ label, value, onChange, error }: DatePickerFie
   }
 
   return (
-    <View style={styles.wrap}>
+      <View style={styles.wrap}>
       <AppText variant="small" muted>{label}</AppText>
-      <Pressable onPress={open} style={[styles.input, error && styles.inputError]}>
+      <Pressable onPress={open} style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: error ? theme.colors.danger : theme.colors.border }]}>
         <AppText>{value}</AppText>
-        <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+        <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
       </Pressable>
-      {error ? <AppText variant="small" style={styles.error}>{error}</AppText> : null}
+      {error ? <AppText variant="small" style={{ color: theme.colors.danger }}>{error}</AppText> : null}
 
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.panel}>
+        <View style={[styles.backdrop, { backgroundColor: theme.scheme === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(7,17,19,0.28)' }]}>
+          <View style={[styles.panel, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
             <View style={styles.header}>
-              <Pressable onPress={() => moveMonth(-1)} style={styles.iconButton}>
-                <Ionicons name="chevron-back" size={22} color={colors.text} />
+              <Pressable onPress={() => moveMonth(-1)} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <Ionicons name="chevron-back" size={22} color={theme.colors.text} />
               </Pressable>
               <View style={styles.monthTitle}>
                 <AppText variant="h2">{monthNames[visibleMonth.getMonth()]}</AppText>
                 <AppText variant="small" muted>{visibleMonth.getFullYear()}</AppText>
               </View>
-              <Pressable onPress={() => moveMonth(1)} style={styles.iconButton}>
-                <Ionicons name="chevron-forward" size={22} color={colors.text} />
+              <Pressable onPress={() => moveMonth(1)} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <Ionicons name="chevron-forward" size={22} color={theme.colors.text} />
               </Pressable>
             </View>
 
@@ -80,14 +82,18 @@ export function DatePickerField({ label, value, onChange, error }: DatePickerFie
                     onPress={() => selectDate(date)}
                     style={styles.day}
                   >
-                    <View style={[styles.dayBadge, selected && styles.selectedDay, isToday && !selected && styles.todayDay]}>
+                    <View style={[
+                      styles.dayBadge,
+                      selected && { backgroundColor: theme.colors.primary },
+                      isToday && !selected && { borderWidth: 1, borderColor: theme.colors.primary },
+                    ]}>
                       <AppText
                         variant="small"
                         style={[
-                          styles.dayText,
-                          !currentMonth && styles.mutedDayText,
-                          selected && styles.selectedDayText,
-                          isToday && !selected && styles.todayDayText,
+                          { color: theme.colors.text },
+                          !currentMonth && { color: theme.colors.textMuted, opacity: 0.55 },
+                          selected && { color: theme.colors.background, fontWeight: '800' },
+                          isToday && !selected && { color: theme.colors.primary },
                         ]}
                       >
                         {date.getDate()}
@@ -99,10 +105,10 @@ export function DatePickerField({ label, value, onChange, error }: DatePickerFie
             </View>
 
             <View style={styles.actions}>
-              <Pressable onPress={() => selectDate(parseDate(todayValue)!)} style={styles.actionButton}>
-                <AppText variant="small" style={styles.actionText}>Today</AppText>
+              <Pressable onPress={() => selectDate(parseDate(todayValue)!)} style={[styles.actionButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <AppText variant="small" style={{ color: theme.colors.primary }}>Today</AppText>
               </Pressable>
-              <Pressable onPress={() => setVisible(false)} style={styles.actionButton}>
+              <Pressable onPress={() => setVisible(false)} style={[styles.actionButton, { backgroundColor: theme.colors.surfaceMuted }]}>
                 <AppText variant="small">Cancel</AppText>
               </Pressable>
             </View>

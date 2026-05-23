@@ -1,16 +1,15 @@
 import { useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { AccountsStackParamList } from '../../../app/routes/types';
-import { AppText } from '../../../shared/components/AppText';
 import { FormInput } from '../../../shared/components/FormInput';
 import { Header } from '../../../shared/components/Header';
 import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
-import { colors, radius, spacing } from '../../../shared/theme/theme';
+import { SegmentedControl } from '../../../shared/components/SegmentedControl';
 import type { AccountType } from '../../../shared/types/api';
 import { accountService } from '../services/accountService';
 
@@ -22,7 +21,12 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 type Props = NativeStackScreenProps<AccountsStackParamList, 'AddEditAccount'>;
-const types: AccountType[] = ['CASH', 'BANK', 'WALLET', 'OTHER'];
+const typeOptions = [
+  { label: 'Cash', value: 'CASH' },
+  { label: 'Bank', value: 'BANK' },
+  { label: 'Wallet', value: 'WALLET' },
+  { label: 'Other', value: 'OTHER' },
+];
 
 export function AddEditAccountScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
@@ -50,13 +54,7 @@ export function AddEditAccountScreen({ navigation }: Props) {
   return (
     <Screen>
       <Header title="Add account" subtitle="Create a money source" />
-      <View style={styles.typeRow}>
-        {types.map((type) => (
-          <PrimaryButton key={type} variant={watch('type') === type ? 'primary' : 'ghost'} onPress={() => setValue('type', type)} style={styles.typeButton}>
-            <AppText variant="small" style={{ color: watch('type') === type ? colors.background : colors.text }}>{type}</AppText>
-          </PrimaryButton>
-        ))}
-      </View>
+      <SegmentedControl compact options={typeOptions} value={watch('type')} onChange={(type) => setValue('type', type as AccountType)} />
       <Controller control={control} name="name" render={({ field }) => (
         <FormInput label="Account name" placeholder="Cash, Bank, bKash" value={field.value} onChangeText={field.onChange} error={errors.name?.message} />
       )} />
@@ -67,15 +65,3 @@ export function AddEditAccountScreen({ navigation }: Props) {
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  typeRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  typeButton: {
-    minHeight: 42,
-    borderRadius: radius.sm,
-  },
-});

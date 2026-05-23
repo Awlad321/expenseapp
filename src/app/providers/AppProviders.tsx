@@ -3,6 +3,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './AuthContext';
 import { backupService } from '../../services/api/backupService';
+import { ThemeProvider } from '../../shared/theme/ThemeContext';
 
 export function AppProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
@@ -14,7 +15,9 @@ export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AuthProvider>{children}</AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing } from '../theme/theme';
+import { useTheme } from '../theme/ThemeContext';
 
 interface ScreenProps {
   children: ReactNode;
@@ -12,13 +13,14 @@ interface ScreenProps {
 }
 
 export function Screen({ children, scroll = true, style, refreshing = false, onRefresh }: ScreenProps) {
+  const theme = useTheme();
   const content = <View style={[styles.content, style]}>{children}</View>;
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]}>
       {scroll ? (
         <ScrollView
           contentContainerStyle={styles.scroll}
-          refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined}
+          refreshControl={onRefresh ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} /> : undefined}
           showsVerticalScrollIndicator={false}
         >
           {content}

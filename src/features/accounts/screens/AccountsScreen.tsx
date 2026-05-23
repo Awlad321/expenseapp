@@ -11,6 +11,7 @@ import { Header } from '../../../shared/components/Header';
 import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
 import { colors, spacing } from '../../../shared/theme/theme';
+import { useTheme } from '../../../shared/theme/ThemeContext';
 import { formatMoney } from '../../../shared/utils/format';
 import type { Account } from '../../../shared/types/api';
 import { accountService } from '../services/accountService';
@@ -18,6 +19,7 @@ import { accountService } from '../services/accountService';
 type Props = NativeStackScreenProps<AccountsStackParamList, 'AccountsHome'>;
 
 export function AccountsScreen({ navigation }: Props) {
+  const theme = useTheme();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -51,8 +53,8 @@ export function AccountsScreen({ navigation }: Props) {
         <Card>
           <View style={styles.row}>
             <View style={styles.left}>
-              <View style={styles.icon}>
-                <Ionicons name={account.type === 'BANK' ? 'business-outline' : account.type === 'CASH' ? 'cash-outline' : 'wallet-outline'} size={22} color={colors.primary} />
+              <View style={[styles.icon, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <Ionicons name={account.type === 'BANK' ? 'business-outline' : account.type === 'CASH' ? 'cash-outline' : 'wallet-outline'} size={22} color={theme.colors.primary} />
               </View>
               <View>
                 <AppText variant="h2">{account.name}</AppText>
@@ -63,7 +65,7 @@ export function AccountsScreen({ navigation }: Props) {
           </View>
           <View style={styles.ledgerHint}>
             <AppText variant="small" muted>View ledger</AppText>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
           </View>
         </Card>
         </Pressable>
