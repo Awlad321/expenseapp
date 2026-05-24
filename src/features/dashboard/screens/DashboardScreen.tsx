@@ -97,8 +97,8 @@ export function DashboardScreen({ navigation }: Props) {
       >
         <View style={styles.heroTop}>
           <View>
-            <AppText variant="small" style={{ color: theme.scheme === 'dark' ? 'rgba(244,251,248,0.74)' : theme.colors.textMuted }}>Total balance</AppText>
-            <AppText variant="title">{formatMoney(summary.totalBalance)}</AppText>
+            <AppText variant="small" style={{ color: theme.scheme === 'dark' ? 'rgba(244,251,248,0.74)' : theme.colors.textMuted }}>Remaining</AppText>
+            <AppText variant="title">{formatMoney(summary.remainingBalance ?? summary.totalBalance)}</AppText>
           </View>
           <Pressable onPress={openMonthPicker} style={[styles.monthPill, { backgroundColor: theme.scheme === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(20,158,110,0.12)' }]}>
             <Ionicons name="calendar-outline" size={15} color={theme.colors.text} />
@@ -109,14 +109,12 @@ export function DashboardScreen({ navigation }: Props) {
         <View style={styles.balanceRow}>
           <Metric label="Income" value={formatMoney(summary.totalIncome)} color={theme.colors.income} backgroundColor={theme.scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)'} />
           <Metric label="Expense" value={formatMoney(summary.totalExpense)} color={theme.colors.expense} backgroundColor={theme.scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)'} />
-          <Metric label="Savings" value={formatMoney(summary.monthlySavings)} color={summary.monthlySavings >= 0 ? theme.colors.accent : theme.colors.expense} backgroundColor={theme.scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)'} />
+        </View>
+        <View style={styles.balanceRow}>
+          <Metric label="Today's Expense" value={formatMoney(summary.todayExpense ?? 0)} color={theme.colors.expense} backgroundColor={theme.scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)'} />
+          <Metric label="Remaining" value={formatMoney(summary.remainingBalance ?? summary.totalBalance)} color={theme.colors.accent} backgroundColor={theme.scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)'} />
         </View>
       </LinearGradient>
-
-      <View style={styles.insightRow}>
-        <InsightCard icon="analytics-outline" label="Savings rate" value={`${savingsRate(summary.totalIncome, summary.monthlySavings)}%`} tone={theme.colors.accent} />
-        <InsightCard icon="trending-up-outline" label="MoM expense" value={monthDelta(summary.previousMonthExpense, summary.totalExpense)} tone={summary.totalExpense > summary.previousMonthExpense ? theme.colors.expense : theme.colors.income} />
-      </View>
 
       <View style={styles.quickRow}>
         <QuickAction icon="add-circle-outline" label="Income" color={theme.colors.income} onPress={() => navigation.getParent()?.navigate('Transactions', { screen: 'AddIncome' })} />
@@ -150,27 +148,32 @@ export function DashboardScreen({ navigation }: Props) {
       </Card>
 
       <Card>
-        <SectionHeader title="Recent activity" />
-        {summary.recentTransactions.slice(0, 5).map((item) => (
-          <View key={item.id} style={styles.listRow}>
+        <SectionHeader title="Today's expenses" />
+        {(summary.todayExpenses ?? []).map((item) => (
+          <Pressable
+            key={item.id}
+            onPress={() => navigation.getParent()?.navigate('Transactions', { screen: 'AddExpense', params: { transactionId: item.id } })}
+            style={styles.listRow}
+          >
             <View style={styles.rowLeft}>
-              <View style={[styles.activityIcon, { backgroundColor: item.type === 'INCOME' ? 'rgba(54,211,153,0.13)' : 'rgba(255,122,122,0.13)' }]}>
-                <Ionicons name={item.type === 'INCOME' ? 'arrow-down-left-box' : 'arrow-up-right-box'} size={18} color={item.type === 'INCOME' ? colors.income : colors.expense} />
+              <View style={[styles.activityIcon, { backgroundColor: 'rgba(255,122,122,0.13)' }]}>
+                <Ionicons name="arrow-up-right-box" size={18} color={colors.expense} />
               </View>
-              <View>
+              <View style={styles.todayCopy}>
                 <AppText>{item.categoryName}</AppText>
                 <AppText variant="small" muted>{item.accountName}</AppText>
+                {item.note ? <AppText variant="small" muted>{item.note}</AppText> : null}
               </View>
             </View>
             <View style={styles.amountBlock}>
-              <AppText style={{ color: item.type === 'INCOME' ? colors.income : colors.expense }}>
-                {item.type === 'INCOME' ? '+' : '-'}{formatMoney(item.amount)}
+              <AppText style={{ color: colors.expense }}>
+                -{formatMoney(item.amount)}
               </AppText>
-              <AppText variant="small" muted>{item.transactionDate}</AppText>
+              <AppText variant="small" muted>{formatCreatedAt(item.createdAt)}</AppText>
             </View>
-          </View>
+          </Pressable>
         ))}
-        {summary.recentTransactions.length === 0 ? <AppText muted>No recent transactions.</AppText> : null}
+        {(summary.todayExpenses ?? []).length === 0 ? <AppText muted>No expenses added today</AppText> : null}
       </Card>
 
       <Modal visible={monthPickerVisible} transparent animationType="fade" onRequestClose={() => setMonthPickerVisible(false)}>
@@ -224,20 +227,6 @@ function SectionHeader({ title, action, onAction }: { title: string; action?: st
   );
 }
 
-function InsightCard({ icon, label, value, tone }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string; tone: string }) {
-  return (
-    <View style={styles.insightCard}>
-      <View style={[styles.insightIcon, { backgroundColor: `${tone}20` }]}>
-        <Ionicons name={icon} size={18} color={tone} />
-      </View>
-      <View style={styles.insightCopy}>
-        <AppText variant="small" muted>{label}</AppText>
-        <AppText>{value}</AppText>
-      </View>
-    </View>
-  );
-}
-
 function CategoryBar({ label, amount, max }: { label: string; amount: number; max: number }) {
   return (
     <View style={styles.categoryBar}>
@@ -272,22 +261,14 @@ function QuickAction({ icon, label, color, onPress }: { icon: keyof typeof Ionic
   );
 }
 
-function savingsRate(income: number, savings: number) {
-  if (income <= 0) return 0;
-  return Math.round((savings / income) * 100);
-}
-
-function monthDelta(previous: number, current: number) {
-  if (previous <= 0 && current <= 0) return '0%';
-  if (previous <= 0) return '+100%';
-  const delta = Math.round(((current - previous) / previous) * 100);
-  return `${delta > 0 ? '+' : ''}${delta}%`;
-}
-
 function formatMonthLabel(month: string) {
   const [year, monthValue] = month.split('-');
   const index = Number(monthValue) - 1;
   return `${monthNames[index] ?? monthValue} ${year}`;
+}
+
+function formatCreatedAt(value: string) {
+  return new Date(value).toLocaleTimeString('en-BD', { hour: 'numeric', minute: '2-digit' });
 }
 
 function accountColor(type: string, palette: typeof colors) {
@@ -385,33 +366,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.md,
   },
-  insightRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  insightCard: {
-    flex: 1,
-    minHeight: 72,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.cardGlass,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  insightIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  insightCopy: {
-    flex: 1,
-    gap: spacing.xs,
-  },
   quickRow: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -471,6 +425,10 @@ const styles = StyleSheet.create({
   },
   amountBlock: {
     alignItems: 'flex-end',
+    gap: spacing.xs,
+  },
+  todayCopy: {
+    flex: 1,
     gap: spacing.xs,
   },
   categoryBar: {

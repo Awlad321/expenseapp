@@ -17,7 +17,7 @@ import { backupService } from '../../../services/api/backupService';
 import { dashboardService } from '../../dashboard/services/dashboardService';
 import { transactionService } from '../../transactions/services/transactionService';
 import { useTheme } from '../../../shared/theme/ThemeContext';
-import type { AppColors, ThemePreference } from '../../../shared/theme/theme';
+import type { AppColors } from '../../../shared/theme/theme';
 
 type ReportPeriod = 'day' | 'month' | 'year';
 
@@ -28,12 +28,6 @@ const periodOptions = [
   { label: 'Month', value: 'month' },
   { label: 'Year', value: 'year' },
 ];
-const themeOptions = [
-  { label: 'System', value: 'system' },
-  { label: 'Light', value: 'light' },
-  { label: 'Dark', value: 'dark' },
-];
-
 export function ReportsScreen() {
   const theme = useTheme();
   const [period, setPeriod] = useState<ReportPeriod>('month');
@@ -153,10 +147,6 @@ export function ReportsScreen() {
         ) : (
           <YearSelector year={selectedYear} onChange={setSelectedYear} />
         )}
-      </Card>
-      <Card>
-        <AppText variant="h2">Appearance</AppText>
-        <SegmentedControl compact options={themeOptions} value={theme.preference} onChange={(value) => theme.setPreference(value as ThemePreference)} />
       </Card>
       <Card>
         <AppText variant="h2">Data backup</AppText>

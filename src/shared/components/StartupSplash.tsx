@@ -9,6 +9,9 @@ export function StartupSplash() {
   const scale = useRef(new Animated.Value(0.86)).current;
   const opacity = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
+  const floatOne = useRef(new Animated.Value(0)).current;
+  const floatTwo = useRef(new Animated.Value(0)).current;
+  const floatThree = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -41,8 +44,51 @@ export function StartupSplash() {
           }),
         ])
       ),
+      Animated.loop(
+        Animated.stagger(220, [
+          Animated.sequence([
+            Animated.timing(floatOne, {
+              toValue: 1,
+              duration: 1800,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }),
+            Animated.timing(floatOne, {
+              toValue: 0,
+              duration: 0,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.sequence([
+            Animated.timing(floatTwo, {
+              toValue: 1,
+              duration: 1800,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }),
+            Animated.timing(floatTwo, {
+              toValue: 0,
+              duration: 0,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.sequence([
+            Animated.timing(floatThree, {
+              toValue: 1,
+              duration: 1800,
+              easing: Easing.out(Easing.cubic),
+              useNativeDriver: true,
+            }),
+            Animated.timing(floatThree, {
+              toValue: 0,
+              duration: 0,
+              useNativeDriver: true,
+            }),
+          ]),
+        ])
+      ),
     ]).start();
-  }, [opacity, pulse, scale]);
+  }, [floatOne, floatThree, floatTwo, opacity, pulse, scale]);
 
   const haloScale = pulse.interpolate({
     inputRange: [0, 1],
@@ -52,21 +98,72 @@ export function StartupSplash() {
     inputRange: [0, 1],
     outputRange: [0.22, 0.04],
   });
+  const moneyOneStyle = buildMoneyStyle(floatOne, -48, -86, -28);
+  const moneyTwoStyle = buildMoneyStyle(floatTwo, 0, -118, 0);
+  const moneyThreeStyle = buildMoneyStyle(floatThree, 50, -92, 26);
 
   return (
-    <LinearGradient colors={['#061011', '#09211F', '#071113']} style={styles.screen}>
+    <LinearGradient colors={['#12090F', '#23111A', '#120B11']} style={styles.screen}>
       <Animated.View style={[styles.halo, { opacity: haloOpacity, transform: [{ scale: haloScale }] }]} />
       <Animated.View style={[styles.logoWrap, { opacity, transform: [{ scale }] }]}>
-        <LinearGradient colors={['#37D399', '#7DD3FC']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.logo}>
-          <Ionicons name="wallet-outline" size={46} color={colors.background} />
-        </LinearGradient>
+        <View style={styles.scene}>
+          <Animated.View style={[styles.flyingMoney, moneyOneStyle]}>
+            <Ionicons name="cash-outline" size={26} color="#F7D774" />
+          </Animated.View>
+          <Animated.View style={[styles.flyingMoney, moneyTwoStyle]}>
+            <Ionicons name="cash-outline" size={24} color="#9AE6B4" />
+          </Animated.View>
+          <Animated.View style={[styles.flyingMoney, moneyThreeStyle]}>
+            <Ionicons name="cash-outline" size={22} color="#7DD3FC" />
+          </Animated.View>
+          <LinearGradient colors={['#F59E0B', '#B45309']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.logo}>
+            <Ionicons name="briefcase-outline" size={46} color={colors.background} />
+          </LinearGradient>
+        </View>
         <View style={styles.copy}>
           <AppText variant="title">ExpensApp</AppText>
-          <AppText muted>Smart money control</AppText>
+          <View style={styles.banner}>
+            <AppText muted style={styles.bannerText}>awlad getting poor each time he opens the app</AppText>
+          </View>
         </View>
       </Animated.View>
     </LinearGradient>
   );
+}
+
+function buildMoneyStyle(value: Animated.Value, xOffset: number, yOffset: number, rotateDeg: number) {
+  return {
+    opacity: value.interpolate({
+      inputRange: [0, 0.12, 0.82, 1],
+      outputRange: [0, 1, 0.85, 0],
+    }),
+    transform: [
+      {
+        translateX: value.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, xOffset],
+        }),
+      },
+      {
+        translateY: value.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, yOffset],
+        }),
+      },
+      {
+        rotate: value.interpolate({
+          inputRange: [0, 1],
+          outputRange: ['0deg', `${rotateDeg}deg`],
+        }),
+      },
+      {
+        scale: value.interpolate({
+          inputRange: [0, 0.4, 1],
+          outputRange: [0.7, 1, 0.88],
+        }),
+      },
+    ],
+  };
 }
 
 const styles = StyleSheet.create({
@@ -78,14 +175,20 @@ const styles = StyleSheet.create({
   },
   halo: {
     position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: colors.primary,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: '#F97316',
   },
   logoWrap: {
     alignItems: 'center',
     gap: spacing.xl,
+  },
+  scene: {
+    width: 180,
+    height: 180,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   logo: {
     width: 104,
@@ -93,13 +196,27 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.primary,
-    shadowOpacity: 0.35,
+    shadowColor: '#F59E0B',
+    shadowOpacity: 0.4,
     shadowRadius: 24,
     elevation: 10,
+  },
+  flyingMoney: {
+    position: 'absolute',
+    bottom: 44,
   },
   copy: {
     alignItems: 'center',
     gap: spacing.xs,
+    width: 280,
+  },
+  banner: {
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  bannerText: {
+    textAlign: 'center',
   },
 });

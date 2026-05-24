@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,21 +28,46 @@ const typeOptions = [
   { label: 'Other', value: 'OTHER' },
 ];
 
-export function AddEditAccountScreen({ navigation }: Props) {
+export function AddEditAccountScreen({ navigation, route }: Props) {
+  const accountId = route.params?.accountId;
   const [loading, setLoading] = useState(false);
-  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
+  const [loadingAccount, setLoadingAccount] = useState(Boolean(accountId));
+  const { control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { name: '', type: 'CASH', openingBalance: '0' },
   });
 
+  useEffect(() => {
+    if (!accountId) return;
+
+    accountService.get(accountId)
+      .then((account) => {
+        reset({
+          name: account.name,
+          type: account.type,
+          openingBalance: `${account.openingBalance}`,
+        });
+      })
+      .catch(() => {
+        Alert.alert('Could not load account', 'The selected account could not be loaded.');
+        navigation.goBack();
+      })
+      .finally(() => setLoadingAccount(false));
+  }, [accountId, navigation, reset]);
+
   async function onSubmit(values: FormValues) {
     setLoading(true);
     try {
-      await accountService.create({
+      const payload = {
         name: values.name,
         type: values.type,
         openingBalance: Number(values.openingBalance),
-      });
+      };
+      if (accountId) {
+        await accountService.update(accountId, payload);
+      } else {
+        await accountService.create(payload);
+      }
       navigation.goBack();
     } catch {
       Alert.alert('Could not save account', 'Please check the values and try again.');
@@ -53,7 +78,7 @@ export function AddEditAccountScreen({ navigation }: Props) {
 
   return (
     <Screen>
-      <Header title="Add account" subtitle="Create a money source" />
+      <Header title={accountId ? 'Edit account' : 'Add account'} subtitle={accountId ? 'Update account details' : 'Create a money source'} />
       <SegmentedControl compact options={typeOptions} value={watch('type')} onChange={(type) => setValue('type', type as AccountType)} />
       <Controller control={control} name="name" render={({ field }) => (
         <FormInput label="Account name" placeholder="Cash, Bank, bKash" value={field.value} onChangeText={field.onChange} error={errors.name?.message} />
@@ -61,7 +86,9 @@ export function AddEditAccountScreen({ navigation }: Props) {
       <Controller control={control} name="openingBalance" render={({ field }) => (
         <FormInput label="Opening balance" keyboardType="numeric" value={field.value} onChangeText={field.onChange} error={errors.openingBalance?.message} />
       )} />
-      <PrimaryButton loading={loading} onPress={handleSubmit(onSubmit)}>Save Account</PrimaryButton>
+      <PrimaryButton loading={loading || loadingAccount} disabled={loadingAccount} onPress={handleSubmit(onSubmit)}>
+        {accountId ? 'Update Account' : 'Save Account'}
+      </PrimaryButton>
     </Screen>
   );
 }

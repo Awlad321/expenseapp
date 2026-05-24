@@ -256,12 +256,50 @@ export const localDatabase = {
       .sort(sortByDateDesc);
   },
 
+  async getTransaction(id: number) {
+    const db = await readDb();
+    const transaction = db.transactions.find((item) => item.id === id);
+    if (!transaction) throw new Error('Transaction not found');
+    return transaction;
+  },
+
   async createIncome(payload: TransactionPayload) {
     return createTransaction(payload, 'INCOME');
   },
 
   async createExpense(payload: TransactionPayload) {
     return createTransaction(payload, 'EXPENSE');
+  },
+
+  async updateTransaction(id: number, payload: TransactionPayload) {
+    return mutateDb((db) => {
+      const transaction = db.transactions.find((item) => item.id === id);
+      if (!transaction) throw new Error('Transaction not found');
+      if (transaction.relatedTransferId) {
+        throw new Error('Transfer fee transactions are managed by transfer');
+      }
+
+      reverseTransaction(db, transaction);
+
+      const account = getAccount(db, payload.accountId);
+      const category = getCategory(db, payload.categoryId, transaction.type);
+      transaction.accountId = account.id;
+      transaction.accountName = account.name;
+      transaction.categoryId = category.id;
+      transaction.categoryName = category.name;
+      transaction.amount = positive(payload.amount);
+      transaction.transactionDate = validDate(payload.transactionDate);
+      transaction.note = payload.note;
+      transaction.updatedAt = now();
+
+      if (transaction.type === 'INCOME') {
+        credit(db, account, transaction.amount, 'INCOME', transaction.id, 'Income updated');
+      } else {
+        debit(db, account, transaction.amount, 'EXPENSE', transaction.id, 'Expense updated');
+      }
+
+      return transaction;
+    });
   },
 
   async removeTransaction(id: number) {
@@ -282,6 +320,13 @@ export const localDatabase = {
     return db.transfers
       .filter((transfer) => !month || transfer.transferDate.startsWith(month))
       .sort((a, b) => b.transferDate.localeCompare(a.transferDate) || b.createdAt.localeCompare(a.createdAt));
+  },
+
+  async getTransfer(id: number) {
+    const db = await readDb();
+    const transfer = db.transfers.find((item) => item.id === id);
+    if (!transfer) throw new Error('Transfer not found');
+    return transfer;
   },
 
   async listCreditCards() {
@@ -312,11 +357,40 @@ export const localDatabase = {
     });
   },
 
+  async updateCreditCard(id: number, payload: CreditCardPayload) {
+    return mutateDb((db) => {
+      const card = getCreditCard(db, id);
+      const name = requiredName(payload.name, 'Card name');
+      if (db.creditCards.some((item) => item.id !== id && item.name.trim().toLowerCase() === name.toLowerCase())) {
+        throw new Error('Credit card already exists');
+      }
+      const creditLimit = positive(payload.creditLimit);
+      if (creditLimit < card.outstandingBalance) {
+        throw new Error('Credit limit cannot be below outstanding balance');
+      }
+
+      card.name = name;
+      card.creditLimit = creditLimit;
+      card.billingDay = payload.billingDay ?? null;
+      card.dueDay = payload.dueDay ?? null;
+      card.updatedAt = now();
+
+      db.creditCardActivities.forEach((activity) => {
+        if (activity.cardId === card.id) {
+          activity.cardName = card.name;
+        }
+      });
+
+      return card;
+    });
+  },
+
   async spendWithCreditCard(payload: CreditCardSpendPayload) {
     return mutateDb((db) => {
       const card = getCreditCard(db, payload.cardId);
       const category = getCategory(db, payload.categoryId, 'EXPENSE');
       const amount = positive(payload.amount);
+      ensureAvailableLimit(card, amount);
       card.outstandingBalance = money(card.outstandingBalance + amount);
       card.updatedAt = now();
       return addCreditCardActivity(db, card, {
@@ -327,6 +401,74 @@ export const localDatabase = {
         activityDate: validDate(payload.activityDate),
         note: payload.note,
       });
+    });
+  },
+
+  async updateCreditCardActivity(
+    id: number,
+    payload: CreditCardSpendPayload | CreditCardPaymentPayload
+  ) {
+    return mutateDb((db) => {
+      const activity = db.creditCardActivities.find((item) => item.id === id);
+      if (!activity) throw new Error('Credit card activity not found');
+
+      if (activity.type === 'SPEND') {
+        const oldCard = getCreditCard(db, activity.cardId);
+        oldCard.outstandingBalance = money(oldCard.outstandingBalance - activity.amount);
+        oldCard.updatedAt = now();
+
+        const nextPayload = payload as CreditCardSpendPayload;
+        const nextCard = getCreditCard(db, nextPayload.cardId);
+        const category = getCategory(db, nextPayload.categoryId, 'EXPENSE');
+        const amount = positive(nextPayload.amount);
+        ensureAvailableLimit(nextCard, amount);
+
+        nextCard.outstandingBalance = money(nextCard.outstandingBalance + amount);
+        nextCard.updatedAt = now();
+        activity.cardId = nextCard.id;
+        activity.cardName = nextCard.name;
+        activity.categoryId = category.id;
+        activity.categoryName = category.name;
+        activity.amount = amount;
+        activity.activityDate = validDate(nextPayload.activityDate);
+        activity.balanceAfter = nextCard.outstandingBalance;
+        activity.note = nextPayload.note;
+        return activity;
+      }
+
+      const paymentPayload = payload as CreditCardPaymentPayload;
+      const oldCard = getCreditCard(db, activity.cardId);
+      oldCard.outstandingBalance = money(oldCard.outstandingBalance + activity.amount);
+      oldCard.updatedAt = now();
+
+      if (activity.sourceAccountId) {
+        const oldAccount = getAccount(db, activity.sourceAccountId);
+        credit(db, oldAccount, activity.amount, 'MANUAL_ADJUSTMENT', oldCard.id, `Reversal: credit card payment ${oldCard.name}`);
+      }
+
+      const nextCard = getCreditCard(db, paymentPayload.cardId);
+      const nextAccount = getAccount(db, paymentPayload.sourceAccountId);
+      const amount = positive(paymentPayload.amount);
+      if (nextAccount.currentBalance < amount) {
+        throw new Error('Insufficient source account balance');
+      }
+      if (nextCard.outstandingBalance < amount) {
+        throw new Error('Payment cannot exceed outstanding debt');
+      }
+
+      nextCard.outstandingBalance = money(nextCard.outstandingBalance - amount);
+      nextCard.updatedAt = now();
+      debit(db, nextAccount, amount, 'MANUAL_ADJUSTMENT', nextCard.id, `Credit card payment: ${nextCard.name}`);
+
+      activity.cardId = nextCard.id;
+      activity.cardName = nextCard.name;
+      activity.amount = amount;
+      activity.activityDate = validDate(paymentPayload.activityDate);
+      activity.sourceAccountId = nextAccount.id;
+      activity.sourceAccountName = nextAccount.name;
+      activity.balanceAfter = nextCard.outstandingBalance;
+      activity.note = paymentPayload.note;
+      return activity;
     });
   },
 
@@ -364,50 +506,31 @@ export const localDatabase = {
 
   async createTransfer(payload: TransferPayload) {
     return mutateDb((db) => {
-      if (payload.fromAccountId === payload.toAccountId) {
-        throw new Error('Source and destination must be different');
-      }
-      const from = getAccount(db, payload.fromAccountId);
-      const to = getAccount(db, payload.toAccountId);
-      const amount = positive(payload.amount);
-      const feeAmount = money(payload.feeAmount || 0);
-      if (feeAmount < 0) throw new Error('Fee cannot be negative');
-      if (from.currentBalance < amount + feeAmount) {
-        throw new Error('Insufficient balance');
-      }
-
       const transfer: Transfer = {
         id: nextId(db),
-        fromAccountId: from.id,
-        fromAccountName: from.name,
-        toAccountId: to.id,
-        toAccountName: to.name,
-        amount,
-        feeAmount,
+        fromAccountId: 0,
+        fromAccountName: '',
+        toAccountId: 0,
+        toAccountName: '',
+        amount: 0,
+        feeAmount: 0,
         transferDate: validDate(payload.transferDate),
         note: payload.note,
         createdAt: now(),
         updatedAt: now(),
       };
       db.transfers.push(transfer);
-      debit(db, from, amount, 'TRANSFER', transfer.id, `Transfer to ${to.name}`);
-      credit(db, to, amount, 'TRANSFER', transfer.id, `Transfer from ${from.name}`);
+      applyTransfer(db, transfer, payload);
+      return transfer;
+    });
+  },
 
-      if (feeAmount > 0) {
-        const category = getTransferFeeCategory(db);
-        const feeTransaction = addTransaction(db, {
-          account: from,
-          category,
-          type: 'EXPENSE',
-          amount: feeAmount,
-          transactionDate: validDate(payload.transferDate),
-          note: 'Transfer fee',
-          relatedTransferId: transfer.id,
-          ledgerReferenceType: 'TRANSFER_FEE',
-        });
-        transfer.feeTransactionId = feeTransaction.id;
-      }
-
+  async updateTransfer(id: number, payload: TransferPayload) {
+    return mutateDb((db) => {
+      const transfer = db.transfers.find((item) => item.id === id);
+      if (!transfer) throw new Error('Transfer not found');
+      reverseTransfer(db, transfer);
+      applyTransfer(db, transfer, payload);
       return transfer;
     });
   },
@@ -415,11 +538,15 @@ export const localDatabase = {
   async dashboardSummary(month: string): Promise<DashboardSummary> {
     const db = await readDb();
     const monthlyTransactions = db.transactions.filter((transaction) => transaction.transactionDate.startsWith(month));
+    const today = todayValue();
+    const todayExpenses = db.transactions
+      .filter((transaction) => transaction.type === 'EXPENSE' && !transaction.relatedTransferId && transaction.transactionDate === today)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     const previousMonth = getPreviousMonth(month);
     const previousTransactions = db.transactions.filter((transaction) => transaction.transactionDate.startsWith(previousMonth));
     const totalIncome = sumByType(monthlyTransactions, 'INCOME');
     const totalExpense = sumByType(monthlyTransactions, 'EXPENSE');
-    const totalBalance = money(db.accounts.reduce((sum, account) => sum + account.currentBalance, 0));
+    const totalBalance = money(db.accounts.filter((account) => account.active).reduce((sum, account) => sum + account.currentBalance, 0));
     const totalCreditCardDebt = money(db.creditCards.reduce((sum, card) => sum + card.outstandingBalance, 0));
 
     return {
@@ -428,11 +555,14 @@ export const localDatabase = {
       totalExpense,
       monthlySavings: money(totalIncome - totalExpense),
       totalBalance,
+      remainingBalance: totalBalance,
+      todayExpense: money(todayExpenses.reduce((sum, transaction) => sum + transaction.amount, 0)),
+      todayExpenses,
       totalCreditCardDebt,
       netPosition: money(totalBalance - totalCreditCardDebt),
       previousMonthIncome: sumByType(previousTransactions, 'INCOME'),
       previousMonthExpense: sumByType(previousTransactions, 'EXPENSE'),
-      accountBalances: db.accounts.map((account) => ({
+      accountBalances: db.accounts.filter((account) => account.active).map((account) => ({
         accountId: account.id,
         accountName: account.name,
         type: account.type,
@@ -485,6 +615,50 @@ async function createTransaction(payload: TransactionPayload, type: TransactionT
   });
 }
 
+function applyTransfer(db: LocalDatabase, transfer: Transfer, payload: TransferPayload) {
+  if (payload.fromAccountId === payload.toAccountId) {
+    throw new Error('Source and destination must be different');
+  }
+
+  const from = getAccount(db, payload.fromAccountId);
+  const to = getAccount(db, payload.toAccountId);
+  const amount = positive(payload.amount);
+  const feeAmount = money(payload.feeAmount || 0);
+  if (feeAmount < 0) throw new Error('Fee cannot be negative');
+  if (from.currentBalance < amount + feeAmount) {
+    throw new Error('Insufficient balance');
+  }
+
+  transfer.fromAccountId = from.id;
+  transfer.fromAccountName = from.name;
+  transfer.toAccountId = to.id;
+  transfer.toAccountName = to.name;
+  transfer.amount = amount;
+  transfer.feeAmount = feeAmount;
+  transfer.transferDate = validDate(payload.transferDate);
+  transfer.note = payload.note;
+  transfer.updatedAt = now();
+  transfer.feeTransactionId = null;
+
+  debit(db, from, amount, 'TRANSFER', transfer.id, `Transfer to ${to.name}`);
+  credit(db, to, amount, 'TRANSFER', transfer.id, `Transfer from ${from.name}`);
+
+  if (feeAmount > 0) {
+    const category = getTransferFeeCategory(db);
+    const feeTransaction = addTransaction(db, {
+      account: from,
+      category,
+      type: 'EXPENSE',
+      amount: feeAmount,
+      transactionDate: transfer.transferDate,
+      note: 'Transfer fee',
+      relatedTransferId: transfer.id,
+      ledgerReferenceType: 'TRANSFER_FEE',
+    });
+    transfer.feeTransactionId = feeTransaction.id;
+  }
+}
+
 function addTransaction(
   db: LocalDatabase,
   input: {
@@ -528,6 +702,22 @@ function reverseTransaction(db: LocalDatabase, transaction: Transaction) {
     debit(db, account, transaction.amount, referenceType, transaction.id, 'Reversal: income');
   } else {
     credit(db, account, transaction.amount, referenceType, transaction.id, 'Reversal: expense');
+  }
+}
+
+function reverseTransfer(db: LocalDatabase, transfer: Transfer) {
+  const from = getAccount(db, transfer.fromAccountId);
+  const to = getAccount(db, transfer.toAccountId);
+  credit(db, from, transfer.amount, 'TRANSFER', transfer.id, `Reversal: transfer to ${transfer.toAccountName}`);
+  debit(db, to, transfer.amount, 'TRANSFER', transfer.id, `Reversal: transfer from ${transfer.fromAccountName}`);
+
+  if (transfer.feeTransactionId) {
+    const feeTransaction = db.transactions.find((item) => item.id === transfer.feeTransactionId);
+    if (feeTransaction) {
+      reverseTransaction(db, feeTransaction);
+      db.transactions = db.transactions.filter((item) => item.id !== feeTransaction.id);
+    }
+    transfer.feeTransactionId = null;
   }
 }
 
@@ -717,6 +907,12 @@ function addCreditCardActivity(
   return activity;
 }
 
+function ensureAvailableLimit(card: CreditCard, amount: number) {
+  if (money(card.creditLimit - card.outstandingBalance) < amount) {
+    throw new Error('Insufficient available credit limit');
+  }
+}
+
 function credit(db: LocalDatabase, account: Account, amount: number, referenceType: LedgerReferenceType, referenceId: number, description: string) {
   account.currentBalance = money(account.currentBalance + amount);
   account.updatedAt = now();
@@ -817,6 +1013,10 @@ function validDate(value: string) {
 
 function now() {
   return new Date().toISOString();
+}
+
+function todayValue() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 function escapeCsv(value: string) {

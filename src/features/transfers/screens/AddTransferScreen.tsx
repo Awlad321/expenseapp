@@ -29,11 +29,13 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 type Props = NativeStackScreenProps<TransfersStackParamList, 'AddTransfer'>;
 
-export function AddTransferScreen({ navigation }: Props) {
+export function AddTransferScreen({ navigation, route }: Props) {
+  const transferId = route.params?.transferId;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
+  const [loadingTransfer, setLoadingTransfer] = useState(Boolean(transferId));
+  const { control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { fromAccountId: 0, toAccountId: 0, amount: '', feeAmount: '0', transferDate: today(), note: '' },
   });
@@ -51,6 +53,30 @@ export function AddTransferScreen({ navigation }: Props) {
     loadAccounts();
   }, []);
 
+  useEffect(() => {
+    if (!transferId) {
+      setLoadingTransfer(false);
+      return;
+    }
+
+    transferService.get(transferId)
+      .then((transfer) => {
+        reset({
+          fromAccountId: transfer.fromAccountId,
+          toAccountId: transfer.toAccountId,
+          amount: `${transfer.amount}`,
+          feeAmount: `${transfer.feeAmount}`,
+          transferDate: transfer.transferDate,
+          note: transfer.note ?? '',
+        });
+      })
+      .catch(() => {
+        Alert.alert('Could not load transfer', 'The selected transfer could not be loaded.');
+        navigation.goBack();
+      })
+      .finally(() => setLoadingTransfer(false));
+  }, [navigation, reset, transferId]);
+
   async function refresh() {
     setRefreshing(true);
     await loadAccounts();
@@ -63,14 +89,19 @@ export function AddTransferScreen({ navigation }: Props) {
     }
     setLoading(true);
     try {
-      await transferService.create({
+      const payload = {
         fromAccountId: values.fromAccountId,
         toAccountId: values.toAccountId,
         amount: Number(values.amount),
         feeAmount: Number(values.feeAmount || 0),
         transferDate: values.transferDate,
         note: values.note,
-      });
+      };
+      if (transferId) {
+        await transferService.update(transferId, payload);
+      } else {
+        await transferService.create(payload);
+      }
       navigation.goBack();
     } catch {
       Alert.alert('Could not save transfer', 'Check balance, accounts, amount, and fee.');
@@ -81,7 +112,7 @@ export function AddTransferScreen({ navigation }: Props) {
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
-      <Header title="Transfer money" subtitle="Does not count as income or expense" />
+      <Header title={transferId ? 'Edit transfer' : 'Transfer money'} subtitle="Does not count as income or expense" />
       <ChoiceRow title="From" accounts={accounts} selectedId={watch('fromAccountId')} onSelect={(id) => setValue('fromAccountId', id)} />
       {errors.fromAccountId ? <AppText variant="small" style={styles.error}>{errors.fromAccountId.message}</AppText> : null}
       <ChoiceRow title="To" accounts={accounts} selectedId={watch('toAccountId')} onSelect={(id) => setValue('toAccountId', id)} />
@@ -98,7 +129,9 @@ export function AddTransferScreen({ navigation }: Props) {
       <Controller control={control} name="note" render={({ field }) => (
         <FormInput label="Note" value={field.value} onChangeText={field.onChange} />
       )} />
-      <PrimaryButton loading={loading} onPress={handleSubmit(onSubmit)}>Save Transfer</PrimaryButton>
+      <PrimaryButton loading={loading || loadingTransfer} disabled={loadingTransfer} onPress={handleSubmit(onSubmit)}>
+        {transferId ? 'Update Transfer' : 'Save Transfer'}
+      </PrimaryButton>
     </Screen>
   );
 }

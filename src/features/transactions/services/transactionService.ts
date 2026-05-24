@@ -13,6 +13,9 @@ export const transactionService = {
   async list(params?: { type?: TransactionType; month?: string }) {
     return localDatabase.listTransactions(params);
   },
+  async get(id: number) {
+    return localDatabase.getTransaction(id);
+  },
   async exportCsv(month: string) {
     return localDatabase.exportCsv(month);
   },
@@ -24,5 +27,8 @@ export const transactionService = {
   },
   async remove(id: number) {
     await localDatabase.removeTransaction(id);
+  },
+  async update(id: number, payload: TransactionPayload) {
+    return localDatabase.updateTransaction(id, payload);
   },
 };

@@ -118,6 +118,9 @@ export interface DashboardSummary {
   totalExpense: number;
   monthlySavings: number;
   totalBalance: number;
+  remainingBalance?: number;
+  todayExpense?: number;
+  todayExpenses?: Transaction[];
   totalCreditCardDebt?: number;
   netPosition?: number;
   previousMonthIncome: number;

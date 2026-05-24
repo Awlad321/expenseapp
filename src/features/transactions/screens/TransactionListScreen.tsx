@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -73,9 +73,17 @@ export function TransactionListScreen({ navigation }: Props) {
                     <AppText variant="small" muted>{item.accountName}</AppText>
                   </View>
                 </View>
-                <AppText style={{ color: item.type === 'INCOME' ? colors.income : colors.expense }}>
-                  {item.type === 'INCOME' ? '+' : '-'}{formatMoney(item.amount)}
-                </AppText>
+                <View style={styles.rowRight}>
+                  <AppText style={{ color: item.type === 'INCOME' ? colors.income : colors.expense }}>
+                    {item.type === 'INCOME' ? '+' : '-'}{formatMoney(item.amount)}
+                  </AppText>
+                  <Pressable
+                    onPress={() => navigation.navigate(item.type === 'INCOME' ? 'AddIncome' : 'AddExpense', { transactionId: item.id })}
+                    style={styles.editButton}
+                  >
+                    <Ionicons name="create-outline" size={18} color={colors.primary} />
+                  </Pressable>
+                </View>
               </View>
             ))}
           </Card>
@@ -155,5 +163,17 @@ const styles = StyleSheet.create({
   divider: {
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
+  },
+  rowRight: {
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+  },
+  editButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(20,158,110,0.10)',
   },
 });

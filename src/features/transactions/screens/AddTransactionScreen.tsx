@@ -33,7 +33,8 @@ type Props = NativeStackScreenProps<TransactionsStackParamList, 'AddIncome' | 'A
 
 export function AddTransactionScreen({ route, navigation }: Props) {
   const theme = useTheme();
-  const type = ((route.params as { type?: TransactionType } | undefined)?.type ?? (route.name === 'AddIncome' ? 'INCOME' : 'EXPENSE')) as TransactionType;
+  const type = (route.name === 'AddIncome' ? 'INCOME' : 'EXPENSE') as TransactionType;
+  const transactionId = route.params?.transactionId;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,9 +42,10 @@ export function AddTransactionScreen({ route, navigation }: Props) {
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [categoryName, setCategoryName] = useState('');
   const [categorySaving, setCategorySaving] = useState(false);
+  const [loadingTransaction, setLoadingTransaction] = useState(Boolean(transactionId));
   const [recentAmounts, setRecentAmounts] = useState<string[]>([]);
   const [recentCategoryIds, setRecentCategoryIds] = useState<number[]>([]);
-  const { control, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormValues>({
+  const { control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { accountId: 0, categoryId: 0, amount: '', transactionDate: today(), note: '' },
   });
@@ -76,6 +78,29 @@ export function AddTransactionScreen({ route, navigation }: Props) {
     loadOptions();
   }, [type]);
 
+  useEffect(() => {
+    if (!transactionId) {
+      setLoadingTransaction(false);
+      return;
+    }
+
+    transactionService.get(transactionId)
+      .then((transaction) => {
+        reset({
+          accountId: transaction.accountId,
+          categoryId: transaction.categoryId,
+          amount: `${transaction.amount}`,
+          transactionDate: transaction.transactionDate,
+          note: transaction.note ?? '',
+        });
+      })
+      .catch(() => {
+        Alert.alert('Could not load transaction', 'The selected transaction could not be loaded.');
+        navigation.goBack();
+      })
+      .finally(() => setLoadingTransaction(false));
+  }, [navigation, reset, transactionId]);
+
   async function refresh() {
     setRefreshing(true);
     await loadOptions();
@@ -91,7 +116,9 @@ export function AddTransactionScreen({ route, navigation }: Props) {
         transactionDate: values.transactionDate,
         note: values.note,
       };
-      if (type === 'INCOME') {
+      if (transactionId) {
+        await transactionService.update(transactionId, payload);
+      } else if (type === 'INCOME') {
         await transactionService.createIncome(payload);
       } else {
         await transactionService.createExpense(payload);
@@ -133,7 +160,7 @@ export function AddTransactionScreen({ route, navigation }: Props) {
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
-      <Header title={type === 'INCOME' ? 'Add income' : 'Add expense'} subtitle="Transfers stay separate from reports" />
+      <Header title={type === 'INCOME' ? (transactionId ? 'Edit income' : 'Add income') : (transactionId ? 'Edit expense' : 'Add expense')} subtitle="Transfers stay separate from reports" />
       <ChoiceRow title="Account" items={accounts.map((account) => ({ id: account.id, label: account.name }))} selectedId={watch('accountId')} onSelect={(id) => setValue('accountId', id)} />
       {errors.accountId ? <AppText variant="small" style={styles.error}>{errors.accountId.message}</AppText> : null}
       <ChoiceRow
@@ -162,7 +189,9 @@ export function AddTransactionScreen({ route, navigation }: Props) {
       <Controller control={control} name="note" render={({ field }) => (
         <FormInput label="Note" value={field.value} onChangeText={field.onChange} />
       )} />
-      <PrimaryButton loading={loading} onPress={handleSubmit(onSubmit)}>Save</PrimaryButton>
+      <PrimaryButton loading={loading || loadingTransaction} disabled={loadingTransaction} onPress={handleSubmit(onSubmit)}>
+        {transactionId ? 'Update' : 'Save'}
+      </PrimaryButton>
       <Modal visible={categoryModalVisible} transparent animationType="fade" onRequestClose={() => setCategoryModalVisible(false)}>
         <View style={[styles.modalBackdrop, { backgroundColor: theme.scheme === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(7,17,19,0.28)' }]}>
           <View style={[styles.modalPanel, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>

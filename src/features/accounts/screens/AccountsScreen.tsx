@@ -49,8 +49,8 @@ export function AccountsScreen({ navigation }: Props) {
       {!loading && accounts.length === 0 ? (
         <EmptyState icon="wallet-outline" title="No accounts yet" message="Create Cash, Bank, bKash, Nagad, or Rocket sources first." />
       ) : accounts.map((account) => (
-        <Pressable key={account.id} onPress={() => navigation.navigate('AccountLedger', { accountId: account.id, accountName: account.name })}>
-        <Card>
+        <Card key={account.id}>
+        <View>
           <View style={styles.row}>
             <View style={styles.left}>
               <View style={[styles.icon, { backgroundColor: theme.colors.surfaceMuted }]}>
@@ -61,14 +61,19 @@ export function AccountsScreen({ navigation }: Props) {
                 <AppText variant="small" muted>{account.type} {account.active ? 'Active' : 'Inactive'}</AppText>
               </View>
             </View>
-            <AppText variant="h2">{formatMoney(account.currentBalance)}</AppText>
+            <View style={styles.right}>
+              <AppText variant="h2">{formatMoney(account.currentBalance)}</AppText>
+              <Pressable onPress={() => navigation.navigate('AddEditAccount', { accountId: account.id })} style={styles.editButton}>
+                <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
+              </Pressable>
+            </View>
           </View>
-          <View style={styles.ledgerHint}>
+          <Pressable onPress={() => navigation.navigate('AccountLedger', { accountId: account.id, accountName: account.name })} style={styles.ledgerHint}>
             <AppText variant="small" muted>View ledger</AppText>
             <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
-          </View>
+          </Pressable>
+        </View>
         </Card>
-        </Pressable>
       ))}
       <PrimaryButton onPress={() => navigation.navigate('AddEditAccount')}>Add Account</PrimaryButton>
     </Screen>
@@ -101,5 +106,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: spacing.xs,
+  },
+  right: {
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+  },
+  editButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(20,158,110,0.10)',
   },
 });

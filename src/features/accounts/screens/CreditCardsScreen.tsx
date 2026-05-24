@@ -29,6 +29,8 @@ export function CreditCardsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [mode, setMode] = useState<ModalMode>(null);
+  const [editingCardId, setEditingCardId] = useState<number | null>(null);
+  const [editingActivityId, setEditingActivityId] = useState<number | null>(null);
   const [selectedCardId, setSelectedCardId] = useState(0);
   const [selectedAccountId, setSelectedAccountId] = useState(0);
   const [selectedCategoryId, setSelectedCategoryId] = useState(0);
@@ -70,6 +72,8 @@ export function CreditCardsScreen() {
 
   function resetModal(nextMode: ModalMode) {
     setMode(nextMode);
+    setEditingCardId(null);
+    setEditingActivityId(null);
     setName('');
     setLimit('');
     setAmount('');
@@ -79,21 +83,31 @@ export function CreditCardsScreen() {
 
   async function saveCard() {
     try {
-      await creditCardService.create({ name, creditLimit: Number(limit || 0) });
+      const payload = { name, creditLimit: Number(limit || 0) };
+      if (editingCardId) {
+        await creditCardService.update(editingCardId, payload);
+      } else {
+        await creditCardService.create(payload);
+      }
       resetModal(null);
       await load();
     } catch {
-      Alert.alert('Could not add card', 'Enter a card name and valid credit limit.');
+      Alert.alert('Could not save card', 'Enter a card name and valid credit limit.');
     }
   }
 
   async function saveSpend() {
     try {
-      await creditCardService.spend({ cardId: selectedCardId, categoryId: selectedCategoryId, amount: Number(amount), activityDate: date, note });
+      const payload = { cardId: selectedCardId, categoryId: selectedCategoryId, amount: Number(amount), activityDate: date, note };
+      if (editingActivityId) {
+        await creditCardService.updateActivity(editingActivityId, payload);
+      } else {
+        await creditCardService.spend(payload);
+      }
       resetModal(null);
       await load();
     } catch {
-      Alert.alert('Could not record spend', 'Choose a card and enter a positive amount.');
+      Alert.alert('Could not save spend', 'Choose a card and enter a positive amount.');
     }
   }
 
@@ -110,11 +124,44 @@ export function CreditCardsScreen() {
 
   async function savePayment() {
     try {
-      await creditCardService.pay({ cardId: selectedCardId, sourceAccountId: selectedAccountId, amount: Number(amount), activityDate: date, note });
+      const payload = { cardId: selectedCardId, sourceAccountId: selectedAccountId, amount: Number(amount), activityDate: date, note };
+      if (editingActivityId) {
+        await creditCardService.updateActivity(editingActivityId, payload);
+      } else {
+        await creditCardService.pay(payload);
+      }
       resetModal(null);
       await load();
     } catch {
-      Alert.alert('Could not record payment', 'Check source account balance and outstanding card debt.');
+      Alert.alert('Could not save payment', 'Check source account balance and outstanding card debt.');
+    }
+  }
+
+  function startCardEdit(card: CreditCard) {
+    setEditingCardId(card.id);
+    setEditingActivityId(null);
+    setMode('CARD');
+    setName(card.name);
+    setLimit(`${card.creditLimit}`);
+    setAmount('');
+    setDate(today());
+    setNote('');
+  }
+
+  function startActivityEdit(activity: CreditCardActivity) {
+    setEditingCardId(null);
+    setEditingActivityId(activity.id);
+    setSelectedCardId(activity.cardId);
+    setAmount(`${activity.amount}`);
+    setDate(activity.activityDate);
+    setNote(activity.note ?? '');
+
+    if (activity.type === 'PAYMENT') {
+      setMode('PAY');
+      setSelectedAccountId(activity.sourceAccountId ?? 0);
+    } else {
+      setMode('SPEND');
+      setSelectedCategoryId(activity.categoryId ?? 0);
     }
   }
 
@@ -150,7 +197,17 @@ export function CreditCardsScreen() {
               <AppText variant="h2">{card.name}</AppText>
               <AppText variant="small" muted>Limit {formatMoney(card.creditLimit)}</AppText>
             </View>
-            <AppText style={{ color: card.outstandingBalance > 0 ? colors.expense : colors.income }}>{formatMoney(card.outstandingBalance)}</AppText>
+            <View style={styles.cardActions}>
+              <AppText style={{ color: card.outstandingBalance > 0 ? colors.expense : colors.income }}>{formatMoney(card.outstandingBalance)}</AppText>
+              <Pressable onPress={() => startCardEdit(card)} style={styles.editButton}>
+                <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
+              </Pressable>
+            </View>
+          </View>
+          <View style={styles.cardMetrics}>
+            <Metric label="Outstanding" value={formatMoney(card.outstandingBalance)} />
+            <Metric label="Remaining" value={formatMoney(card.creditLimit - card.outstandingBalance)} />
+            <Metric label="Use" value={`${Math.round((card.outstandingBalance / Math.max(card.creditLimit, 1)) * 100)}%`} />
           </View>
           <View style={styles.track}>
             <View style={[styles.fill, { width: `${Math.min((card.outstandingBalance / Math.max(card.creditLimit, 1)) * 100, 100)}%` }]} />
@@ -176,6 +233,9 @@ export function CreditCardsScreen() {
                 {activity.type === 'PAYMENT' ? '-' : '+'}{formatMoney(activity.amount)}
               </AppText>
               <AppText variant="small" muted>Debt {formatMoney(activity.balanceAfter)}</AppText>
+              <Pressable onPress={() => startActivityEdit(activity)} style={styles.editButton}>
+                <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
+              </Pressable>
             </View>
           </View>
         ))}
@@ -186,7 +246,15 @@ export function CreditCardsScreen() {
         <View style={[styles.backdrop, { backgroundColor: theme.scheme === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(7,17,19,0.28)' }]}>
           <View style={[styles.panel, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
             <View style={styles.modalHeader}>
-              <AppText variant="h2">{mode === 'CARD' ? 'Add credit card' : mode === 'SPEND' ? 'Card spending' : mode === 'CATEGORY' ? 'Add category' : 'Card payment'}</AppText>
+              <AppText variant="h2">
+                {mode === 'CARD'
+                  ? editingCardId ? 'Edit credit card' : 'Add credit card'
+                  : mode === 'SPEND'
+                    ? editingActivityId ? 'Edit card spending' : 'Card spending'
+                    : mode === 'CATEGORY'
+                      ? 'Add category'
+                      : editingActivityId ? 'Edit card payment' : 'Card payment'}
+              </AppText>
               <Pressable onPress={() => resetModal(null)}><AppText variant="small" muted>Close</AppText></Pressable>
             </View>
 
@@ -194,7 +262,7 @@ export function CreditCardsScreen() {
               <>
                 <FormInput label="Card name" value={name} onChangeText={setName} />
                 <FormInput label="Credit limit" keyboardType="numeric" value={limit} onChangeText={setLimit} />
-                <PrimaryButton onPress={saveCard}>Save Card</PrimaryButton>
+                <PrimaryButton onPress={saveCard}>{editingCardId ? 'Update Card' : 'Save Card'}</PrimaryButton>
               </>
             ) : mode === 'CATEGORY' ? (
               <>
@@ -218,13 +286,26 @@ export function CreditCardsScreen() {
                 <FormInput label="Amount" keyboardType="numeric" value={amount} onChangeText={setAmount} />
                 <DatePickerField label="Date" value={date} onChange={setDate} />
                 <FormInput label="Note" value={note} onChangeText={setNote} />
-                <PrimaryButton onPress={mode === 'SPEND' ? saveSpend : savePayment}>{mode === 'SPEND' ? 'Record Spend' : 'Record Payment'}</PrimaryButton>
+                <PrimaryButton onPress={mode === 'SPEND' ? saveSpend : savePayment}>
+                  {mode === 'SPEND'
+                    ? editingActivityId ? 'Update Spend' : 'Record Spend'
+                    : editingActivityId ? 'Update Payment' : 'Record Payment'}
+                </PrimaryButton>
               </>
             )}
           </View>
         </View>
       </Modal>
     </Screen>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metric}>
+      <AppText variant="small" muted>{label}</AppText>
+      <AppText>{value}</AppText>
+    </View>
   );
 }
 
@@ -295,6 +376,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
   },
+  cardActions: {
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+  },
+  cardMetrics: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  metric: {
+    flex: 1,
+    gap: spacing.xs,
+  },
   track: {
     height: 8,
     borderRadius: 8,
@@ -333,6 +426,14 @@ const styles = StyleSheet.create({
   amounts: {
     alignItems: 'flex-end',
     gap: spacing.xs,
+  },
+  editButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(20,158,110,0.10)',
   },
   backdrop: {
     flex: 1,

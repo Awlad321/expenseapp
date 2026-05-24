@@ -11,6 +11,12 @@ export const accountService = {
   async list() {
     return localDatabase.listAccounts();
   },
+  async get(id: number) {
+    const accounts = await localDatabase.listAccounts();
+    const account = accounts.find((item) => item.id === id);
+    if (!account) throw new Error('Account not found');
+    return account;
+  },
   async create(payload: AccountPayload) {
     return localDatabase.createAccount(payload);
   },

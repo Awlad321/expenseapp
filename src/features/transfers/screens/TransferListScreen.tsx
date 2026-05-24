@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -54,7 +54,12 @@ export function TransferListScreen({ navigation }: Props) {
               <AppText>{item.fromAccountName} → {item.toAccountName}</AppText>
               <AppText variant="small" muted>{item.transferDate} · Fee {formatMoney(item.feeAmount)}</AppText>
             </View>
-            <AppText>{formatMoney(item.amount)}</AppText>
+            <View style={styles.right}>
+              <AppText>{formatMoney(item.amount)}</AppText>
+              <Pressable onPress={() => navigation.navigate('AddTransfer', { transferId: item.id })} style={styles.editButton}>
+                <Ionicons name="create-outline" size={18} color={colors.primary} />
+              </Pressable>
+            </View>
           </View>
         </Card>
       ))}
@@ -71,5 +76,17 @@ const styles = StyleSheet.create({
   copy: {
     flex: 1,
     gap: spacing.xs,
+  },
+  right: {
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+  },
+  editButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(76,145,255,0.12)',
   },
 });

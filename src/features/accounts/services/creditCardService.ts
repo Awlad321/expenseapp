@@ -30,11 +30,17 @@ export const creditCardService = {
   create(payload: CreditCardPayload) {
     return localDatabase.createCreditCard(payload);
   },
+  update(id: number, payload: CreditCardPayload) {
+    return localDatabase.updateCreditCard(id, payload);
+  },
   spend(payload: CreditCardSpendPayload) {
     return localDatabase.spendWithCreditCard(payload);
   },
   pay(payload: CreditCardPaymentPayload) {
     return localDatabase.payCreditCard(payload);
+  },
+  updateActivity(id: number, payload: CreditCardSpendPayload | CreditCardPaymentPayload) {
+    return localDatabase.updateCreditCardActivity(id, payload);
   },
   activities(cardId?: number) {
     return localDatabase.listCreditCardActivities(cardId);

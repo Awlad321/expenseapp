@@ -13,17 +13,27 @@ interface HeaderProps {
 
 export function Header({ title, subtitle, rightIcon, onRightPress }: HeaderProps) {
   const theme = useTheme();
+
+  async function toggleTheme() {
+    await theme.setPreference(theme.scheme === 'dark' ? 'light' : 'dark');
+  }
+
   return (
     <View style={styles.header}>
       <View style={styles.copy}>
         <AppText variant="h1">{title}</AppText>
         {subtitle ? <AppText muted>{subtitle}</AppText> : null}
       </View>
-      {rightIcon ? (
-        <Pressable onPress={onRightPress} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]}>
-          <Ionicons name={rightIcon} size={22} color={theme.colors.text} />
+      <View style={styles.actions}>
+        <Pressable onPress={toggleTheme} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+          <Ionicons name={theme.scheme === 'dark' ? 'sunny-outline' : 'moon-outline'} size={22} color={theme.colors.text} />
         </Pressable>
-      ) : null}
+        {rightIcon ? (
+          <Pressable onPress={onRightPress} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+            <Ionicons name={rightIcon} size={22} color={theme.colors.text} />
+          </Pressable>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -38,6 +48,10 @@ const styles = StyleSheet.create({
   copy: {
     flex: 1,
     gap: spacing.xs,
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
   iconButton: {
     width: 44,

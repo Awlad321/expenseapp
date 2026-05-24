@@ -11,13 +11,13 @@ export type DashboardStackParamList = {
 
 export type TransactionsStackParamList = {
   TransactionList: undefined;
-  AddIncome: undefined;
-  AddExpense: undefined;
+  AddIncome: { transactionId?: number } | undefined;
+  AddExpense: { transactionId?: number } | undefined;
 };
 
 export type TransfersStackParamList = {
   TransferList: undefined;
-  AddTransfer: undefined;
+  AddTransfer: { transferId?: number } | undefined;
 };
 
 export type AccountsStackParamList = {
