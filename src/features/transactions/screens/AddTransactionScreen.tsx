@@ -35,6 +35,7 @@ export function AddTransactionScreen({ route, navigation }: Props) {
   const theme = useTheme();
   const type = (route.name === 'AddIncome' ? 'INCOME' : 'EXPENSE') as TransactionType;
   const transactionId = route.params?.transactionId;
+  const duplicateTransactionId = route.params?.duplicateTransactionId;
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,7 +43,7 @@ export function AddTransactionScreen({ route, navigation }: Props) {
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [categoryName, setCategoryName] = useState('');
   const [categorySaving, setCategorySaving] = useState(false);
-  const [loadingTransaction, setLoadingTransaction] = useState(Boolean(transactionId));
+  const [loadingTransaction, setLoadingTransaction] = useState(Boolean(transactionId || duplicateTransactionId));
   const [recentAmounts, setRecentAmounts] = useState<string[]>([]);
   const [recentCategoryIds, setRecentCategoryIds] = useState<number[]>([]);
   const { control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormValues>({
@@ -79,18 +80,19 @@ export function AddTransactionScreen({ route, navigation }: Props) {
   }, [type]);
 
   useEffect(() => {
-    if (!transactionId) {
+    const sourceTransactionId = transactionId ?? duplicateTransactionId;
+    if (!sourceTransactionId) {
       setLoadingTransaction(false);
       return;
     }
 
-    transactionService.get(transactionId)
+    transactionService.get(sourceTransactionId)
       .then((transaction) => {
         reset({
           accountId: transaction.accountId,
           categoryId: transaction.categoryId,
           amount: `${transaction.amount}`,
-          transactionDate: transaction.transactionDate,
+          transactionDate: duplicateTransactionId ? today() : transaction.transactionDate,
           note: transaction.note ?? '',
         });
       })
@@ -99,7 +101,7 @@ export function AddTransactionScreen({ route, navigation }: Props) {
         navigation.goBack();
       })
       .finally(() => setLoadingTransaction(false));
-  }, [navigation, reset, transactionId]);
+  }, [duplicateTransactionId, navigation, reset, transactionId]);
 
   async function refresh() {
     setRefreshing(true);
@@ -160,7 +162,7 @@ export function AddTransactionScreen({ route, navigation }: Props) {
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
-      <Header title={type === 'INCOME' ? (transactionId ? 'Edit income' : 'Add income') : (transactionId ? 'Edit expense' : 'Add expense')} subtitle="Transfers stay separate from reports" />
+      <Header title={type === 'INCOME' ? (transactionId ? 'Edit income' : duplicateTransactionId ? 'Duplicate income' : 'Add income') : (transactionId ? 'Edit expense' : duplicateTransactionId ? 'Duplicate expense' : 'Add expense')} subtitle="Transfers stay separate from reports" />
       <ChoiceRow title="Account" items={accounts.map((account) => ({ id: account.id, label: account.name }))} selectedId={watch('accountId')} onSelect={(id) => setValue('accountId', id)} />
       {errors.accountId ? <AppText variant="small" style={styles.error}>{errors.accountId.message}</AppText> : null}
       <ChoiceRow
@@ -190,7 +192,7 @@ export function AddTransactionScreen({ route, navigation }: Props) {
         <FormInput label="Note" value={field.value} onChangeText={field.onChange} />
       )} />
       <PrimaryButton loading={loading || loadingTransaction} disabled={loadingTransaction} onPress={handleSubmit(onSubmit)}>
-        {transactionId ? 'Update' : 'Save'}
+        {transactionId ? 'Update' : duplicateTransactionId ? 'Create Copy' : 'Save'}
       </PrimaryButton>
       <Modal visible={categoryModalVisible} transparent animationType="fade" onRequestClose={() => setCategoryModalVisible(false)}>
         <View style={[styles.modalBackdrop, { backgroundColor: theme.scheme === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(7,17,19,0.28)' }]}>

@@ -12,6 +12,7 @@ import { FormInput } from '../../../shared/components/FormInput';
 import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
 import { colors, radius, spacing } from '../../../shared/theme/theme';
+import { useResponsiveLayout } from '../../../shared/layout/responsive';
 
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -23,6 +24,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
 export function LoginScreen({ navigation }: Props) {
   const { signIn } = useAuth();
+  const layout = useResponsiveLayout();
   const [loading, setLoading] = useState(false);
   const { control, handleSubmit, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -43,7 +45,7 @@ export function LoginScreen({ navigation }: Props) {
   return (
     <Screen scroll={false}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrap}>
-        <LinearGradient colors={['#1B4D3E', '#12343A']} style={styles.hero}>
+        <LinearGradient colors={['#1B4D3E', '#12343A']} style={[styles.hero, { minHeight: layout.compact ? 140 : 170, padding: layout.compact ? spacing.lg : spacing.xl }]}>
           <AppText variant="title">ExpensApp</AppText>
           <AppText muted>Track income, expenses, and transfers without mixing the numbers.</AppText>
         </LinearGradient>

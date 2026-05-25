@@ -16,6 +16,7 @@ import { today } from '../../../shared/utils/format';
 import type { Account } from '../../../shared/types/api';
 import { accountService } from '../../accounts/services/accountService';
 import { transferService } from '../services/transferService';
+import { useResponsiveLayout } from '../../../shared/layout/responsive';
 
 const schema = z.object({
   fromAccountId: z.number().positive('Choose source account'),
@@ -31,6 +32,7 @@ type Props = NativeStackScreenProps<TransfersStackParamList, 'AddTransfer'>;
 
 export function AddTransferScreen({ navigation, route }: Props) {
   const transferId = route.params?.transferId;
+  const layout = useResponsiveLayout();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -137,6 +139,7 @@ export function AddTransferScreen({ navigation, route }: Props) {
 }
 
 function ChoiceRow({ title, accounts, selectedId, onSelect }: { title: string; accounts: Account[]; selectedId: number; onSelect: (id: number) => void }) {
+  const layout = useResponsiveLayout();
   return (
     <View style={styles.choiceBlock}>
       <AppText variant="small" muted>{title}</AppText>
@@ -144,7 +147,7 @@ function ChoiceRow({ title, accounts, selectedId, onSelect }: { title: string; a
         {accounts.map((account) => {
           const selected = selectedId === account.id;
           return (
-            <PrimaryButton compact key={account.id} variant={selected ? 'primary' : 'ghost'} onPress={() => onSelect(account.id)} style={styles.chip}>
+            <PrimaryButton compact key={account.id} variant={selected ? 'primary' : 'ghost'} onPress={() => onSelect(account.id)} style={[styles.chip, layout.compact && styles.compactChip]}>
               {account.name}
             </PrimaryButton>
           );
@@ -166,6 +169,9 @@ const styles = StyleSheet.create({
   chip: {
     minHeight: 40,
     borderRadius: radius.sm,
+  },
+  compactChip: {
+    minHeight: 36,
   },
   error: {
     color: colors.danger,

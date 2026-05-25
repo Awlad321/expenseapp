@@ -9,6 +9,7 @@ import { AccountsNavigator } from './AccountsNavigator';
 import { ReportsNavigator } from './ReportsNavigator';
 import { CreditCardsNavigator } from './CreditCardsNavigator';
 import { useTheme } from '../../shared/theme/ThemeContext';
+import { useResponsiveLayout } from '../../shared/layout/responsive';
 
 const Tab = createBottomTabNavigator<AppTabParamList>();
 
@@ -24,7 +25,16 @@ const icons = {
 export function AppTabNavigator() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const layout = useResponsiveLayout();
   const bottomInset = Math.max(insets.bottom, 24);
+  const labels: Record<keyof AppTabParamList, string> = {
+    Dashboard: 'Home',
+    Transactions: 'Transactions',
+    Transfer: 'Move',
+    Accounts: 'Accounts',
+    Cards: 'Cards',
+    Reports: 'Insights',
+  };
 
   return (
     <Tab.Navigator
@@ -33,17 +43,18 @@ export function AppTabNavigator() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 66 + bottomInset,
+          height: (layout.compact ? 60 : 66) + bottomInset,
           paddingBottom: bottomInset,
-          paddingTop: 8,
+          paddingTop: layout.compact ? 6 : 8,
         },
         tabBarItemStyle: {
-          paddingVertical: 4,
+          paddingVertical: layout.compact ? 2 : 4,
         },
         tabBarLabelStyle: {
-          fontSize: 12,
+          fontSize: layout.compact ? 11 : 12,
           fontWeight: '600',
         },
+        tabBarLabel: labels[route.name as keyof AppTabParamList],
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
         tabBarIcon: ({ color, size }) => <Ionicons name={icons[route.name]} color={color} size={size} />,

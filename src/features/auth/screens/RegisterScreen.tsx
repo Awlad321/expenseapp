@@ -11,6 +11,7 @@ import { FormInput } from '../../../shared/components/FormInput';
 import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
 import { spacing } from '../../../shared/theme/theme';
+import { useResponsiveLayout } from '../../../shared/layout/responsive';
 
 const schema = z.object({
   name: z.string().min(2, 'Name is required'),
@@ -23,6 +24,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
 export function RegisterScreen({ navigation }: Props) {
   const { register } = useAuth();
+  const layout = useResponsiveLayout();
   const [loading, setLoading] = useState(false);
   const { control, handleSubmit, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -43,7 +45,7 @@ export function RegisterScreen({ navigation }: Props) {
   return (
     <Screen scroll={false}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrap}>
-        <View style={styles.copy}>
+        <View style={[styles.copy, { gap: layout.compact ? spacing.xs : spacing.sm }]}>
           <AppText variant="title">Create account</AppText>
           <AppText muted>Start with secure access, then add your real money sources.</AppText>
         </View>

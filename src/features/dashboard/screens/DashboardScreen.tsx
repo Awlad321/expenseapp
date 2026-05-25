@@ -16,6 +16,7 @@ import { useTheme } from '../../../shared/theme/ThemeContext';
 import { currentMonth, formatMoney } from '../../../shared/utils/format';
 import type { DashboardSummary } from '../../../shared/types/api';
 import { dashboardService } from '../services/dashboardService';
+import { useResponsiveLayout } from '../../../shared/layout/responsive';
 
 type Props = NativeStackScreenProps<DashboardStackParamList, 'DashboardHome'>;
 
@@ -38,6 +39,7 @@ const fallback: DashboardSummary = {
 export function DashboardScreen({ navigation }: Props) {
   const { user, signOut } = useAuth();
   const theme = useTheme();
+  const layout = useResponsiveLayout();
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [monthPickerVisible, setMonthPickerVisible] = useState(false);
   const [pickerYear, setPickerYear] = useState(() => Number(currentMonth().slice(0, 4)));
@@ -88,19 +90,19 @@ export function DashboardScreen({ navigation }: Props) {
 
   return (
     <Screen style={styles.screen} refreshing={refreshing} onRefresh={refresh}>
-      <Header title="Dashboard" subtitle={`Hi ${user?.name ?? 'there'}`} rightIcon="log-out-outline" onRightPress={signOut} />
+      <Header title="Home" subtitle={`Hi ${user?.name ?? 'there'}`} rightIcon="log-out-outline" onRightPress={signOut} />
       <LinearGradient
         colors={theme.scheme === 'dark' ? ['#1B7A59', '#0E343B', '#111B23'] : ['#DDFBF0', '#BFEFE0', '#F8FFFC']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={[styles.balanceCard, { borderColor: theme.colors.borderStrong }]}
+        style={[styles.balanceCard, { padding: layout.compact ? spacing.lg : spacing.xl, gap: layout.compact ? spacing.md : spacing.lg, borderColor: theme.colors.borderStrong }]}
       >
         <View style={styles.heroTop}>
           <View>
             <AppText variant="small" style={{ color: theme.scheme === 'dark' ? 'rgba(244,251,248,0.74)' : theme.colors.textMuted }}>Remaining</AppText>
             <AppText variant="title">{formatMoney(summary.remainingBalance ?? summary.totalBalance)}</AppText>
           </View>
-          <Pressable onPress={openMonthPicker} style={[styles.monthPill, { backgroundColor: theme.scheme === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(20,158,110,0.12)' }]}>
+          <Pressable onPress={openMonthPicker} style={[styles.monthPill, { minHeight: layout.compact ? 30 : 34, backgroundColor: theme.scheme === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(20,158,110,0.12)' }]}>
             <Ionicons name="calendar-outline" size={15} color={theme.colors.text} />
             <AppText variant="small">{formatMonthLabel(summary.month)}</AppText>
             <Ionicons name="chevron-down" size={14} color={theme.colors.text} />
@@ -116,35 +118,35 @@ export function DashboardScreen({ navigation }: Props) {
         </View>
       </LinearGradient>
 
+      <PrimaryButton onPress={() => navigation.getParent()?.navigate('Transactions', { screen: 'AddExpense' })} style={styles.primaryAction}>
+        <View style={styles.primaryActionContent}>
+          <Ionicons name="remove-circle-outline" size={22} color={theme.colors.background} />
+          <AppText variant="body" style={styles.primaryActionText}>Add expense</AppText>
+        </View>
+      </PrimaryButton>
+
       <View style={styles.quickRow}>
         <QuickAction icon="add-circle-outline" label="Income" color={theme.colors.income} onPress={() => navigation.getParent()?.navigate('Transactions', { screen: 'AddIncome' })} />
-        <QuickAction icon="remove-circle-outline" label="Expense" color={theme.colors.expense} onPress={() => navigation.getParent()?.navigate('Transactions', { screen: 'AddExpense' })} />
-        <QuickAction icon="swap-horizontal-outline" label="Transfer" color={theme.colors.transfer} onPress={() => navigation.getParent()?.navigate('Transfer', { screen: 'AddTransfer' })} />
+        <QuickAction icon="swap-horizontal-outline" label="Move" color={theme.colors.transfer} onPress={() => navigation.getParent()?.navigate('Transfer', { screen: 'AddTransfer' })} />
       </View>
 
       <Card>
         <SectionHeader title="Accounts" action="View all" onAction={() => navigation.getParent()?.navigate('Accounts', { screen: 'AccountsHome' })} />
-        {summary.accountBalances.length === 0 ? <AppText muted>Add Cash, Bank, or Wallet accounts to see balances.</AppText> : summary.accountBalances.map((account) => (
-          <View key={account.accountId} style={[styles.accountTile, { backgroundColor: theme.colors.surface }]}>
-            <View style={styles.rowLeft}>
-              <View style={[styles.accountIcon, { backgroundColor: theme.colors.surfaceMuted }]}>
-                <Ionicons name={account.type === 'BANK' ? 'business-outline' : account.type === 'CASH' ? 'cash-outline' : 'wallet-outline'} size={20} color={accountColor(account.type, theme.colors)} />
+        {summary.accountBalances.length === 0 ? <AppText muted>Add Cash, Bank, or Wallet accounts to see balances.</AppText> : (
+          <View style={styles.accountSummaryGrid}>
+            {buildAccountSummary(summary).map((item) => (
+              <View key={item.type} style={[styles.accountSummaryTile, { minWidth: layout.compact ? 132 : 148, backgroundColor: theme.colors.surface }]}>
+                <View style={styles.accountSummaryTop}>
+                  <View style={[styles.accountBadge, { width: layout.compact ? 24 : 28, height: layout.compact ? 24 : 28, borderRadius: layout.compact ? 12 : 14, backgroundColor: theme.colors.surfaceMuted }]}>
+                    <Ionicons name={item.type === 'BANK' ? 'business-outline' : item.type === 'CASH' ? 'cash-outline' : item.type === 'WALLET' ? 'wallet-outline' : 'layers-outline'} size={15} color={accountColor(item.type, theme.colors)} />
+                  </View>
+                  <AppText variant="small" muted>{item.label}</AppText>
+                </View>
+                <AppText>{formatMoney(item.balance)}</AppText>
               </View>
-              <View>
-                <AppText>{account.accountName}</AppText>
-                <AppText variant="small" muted>{account.type}</AppText>
-              </View>
-            </View>
-            <AppText>{formatMoney(account.balance)}</AppText>
+            ))}
           </View>
-        ))}
-      </Card>
-
-      <Card>
-        <SectionHeader title="Expense categories" />
-        {summary.expenseByCategory.length === 0 ? <AppText muted>No spending in this month yet.</AppText> : summary.expenseByCategory.map((item) => (
-          <CategoryBar key={item.category} label={item.category} amount={item.amount} max={Math.max(...summary.expenseByCategory.map((category) => category.amount), 1)} />
-        ))}
+        )}
       </Card>
 
       <Card>
@@ -176,6 +178,48 @@ export function DashboardScreen({ navigation }: Props) {
         {(summary.todayExpenses ?? []).length === 0 ? <AppText muted>No expenses added today</AppText> : null}
       </Card>
 
+      <Card>
+        <SectionHeader title="Recent changes" action="Transactions" onAction={() => navigation.getParent()?.navigate('Transactions', { screen: 'TransactionList' })} />
+        {buildRecentFeed(summary).map((item) => (
+          <Pressable
+            key={`${item.kind}-${item.id}`}
+            style={styles.listRow}
+            onPress={() => {
+              if (item.kind === 'TRANSFER') {
+                navigation.getParent()?.navigate('Transfer', { screen: 'AddTransfer', params: { transferId: item.id } });
+                return;
+              }
+              navigation.getParent()?.navigate('Transactions', {
+                screen: item.kind === 'INCOME' ? 'AddIncome' : 'AddExpense',
+                params: { transactionId: item.id },
+              });
+            }}
+          >
+            <View style={styles.rowLeft}>
+              <View style={[styles.activityIcon, { backgroundColor: `${item.accent}20` }]}>
+                <Ionicons name={item.icon} size={18} color={item.accent} />
+              </View>
+              <View style={styles.todayCopy}>
+                <AppText>{item.title}</AppText>
+                <AppText variant="small" muted>{item.subtitle}</AppText>
+              </View>
+            </View>
+            <View style={styles.amountBlock}>
+              <AppText style={{ color: item.accent }}>{item.amountLabel}</AppText>
+              <AppText variant="small" muted>{item.when}</AppText>
+            </View>
+          </Pressable>
+        ))}
+        {buildRecentFeed(summary).length === 0 ? <AppText muted>No recent entries yet.</AppText> : null}
+      </Card>
+
+      <Card>
+        <SectionHeader title="Top drains this month" action="Insights" onAction={() => navigation.getParent()?.navigate('Reports', { screen: 'ReportsHome' })} />
+        {summary.expenseByCategory.length === 0 ? <AppText muted>No spending in this month yet.</AppText> : summary.expenseByCategory.slice(0, 4).map((item) => (
+          <CategoryBar key={item.category} label={item.category} amount={item.amount} max={Math.max(...summary.expenseByCategory.map((category) => category.amount), 1)} />
+        ))}
+      </Card>
+
       <Modal visible={monthPickerVisible} transparent animationType="fade" onRequestClose={() => setMonthPickerVisible(false)}>
         <View style={[styles.backdrop, { backgroundColor: theme.scheme === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(7,17,19,0.28)' }]}>
           <View style={[styles.monthPanel, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
@@ -193,7 +237,7 @@ export function DashboardScreen({ navigation }: Props) {
                 const month = `${pickerYear}-${String(index + 1).padStart(2, '0')}`;
                 const selected = selectedMonth === month;
                 return (
-                  <Pressable key={month} onPress={() => selectMonth(month)} style={[styles.monthOption, { backgroundColor: selected ? theme.colors.primary : theme.colors.surface }]}>
+                  <Pressable key={month} onPress={() => selectMonth(month)} style={[styles.monthOption, { minHeight: layout.compact ? 42 : 46, backgroundColor: selected ? theme.colors.primary : theme.colors.surface }]}>
                     <AppText variant="small" style={{ color: selected ? theme.colors.background : theme.colors.text, fontWeight: selected ? '800' : '600' }}>{name}</AppText>
                   </Pressable>
                 );
@@ -278,6 +322,71 @@ function accountColor(type: string, palette: typeof colors) {
   return palette.primary;
 }
 
+function buildAccountSummary(summary: DashboardSummary) {
+  const groups = [
+    { type: 'CASH', label: 'Cash' },
+    { type: 'BANK', label: 'Bank' },
+    { type: 'WALLET', label: 'Wallet' },
+    { type: 'OTHER', label: 'Other' },
+  ] as const;
+
+  return groups
+    .map((group) => {
+      const accounts = summary.accountBalances.filter((account) => account.type === group.type);
+      const balance = accounts.reduce((sum, account) => sum + account.balance, 0);
+      const label = accounts.length === 1 ? accounts[0].accountName : group.label;
+
+      return {
+        ...group,
+        label,
+        balance,
+      };
+    })
+    .filter((group) => group.balance !== 0 || summary.accountBalances.some((account) => account.type === group.type));
+}
+
+type RecentFeedItem = {
+  kind: 'INCOME' | 'EXPENSE' | 'TRANSFER';
+  id: number;
+  title: string;
+  subtitle: string;
+  amountLabel: string;
+  accent: string;
+  when: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  createdAt: string;
+};
+
+function buildRecentFeed(summary: DashboardSummary) {
+  const transactions: RecentFeedItem[] = summary.recentTransactions.map((item) => ({
+    kind: item.type,
+    id: item.id,
+    title: item.categoryName,
+    subtitle: item.accountName,
+    amountLabel: `${item.type === 'INCOME' ? '+' : '-'}${formatMoney(item.amount)}`,
+    accent: item.type === 'INCOME' ? colors.income : colors.expense,
+    when: formatCreatedAt(item.createdAt),
+    icon: item.type === 'INCOME' ? 'arrow-down-left-box' : 'arrow-up-right-box',
+    createdAt: item.createdAt,
+  }));
+
+  const transfers: RecentFeedItem[] = summary.recentTransfers.map((item) => ({
+    kind: 'TRANSFER' as const,
+    id: item.id,
+    title: `${item.fromAccountName} -> ${item.toAccountName}`,
+    subtitle: item.note || 'Internal money movement',
+    amountLabel: formatMoney(item.amount),
+    accent: colors.transfer,
+    when: formatCreatedAt(item.createdAt),
+    icon: 'swap-horizontal-outline' as keyof typeof Ionicons.glyphMap,
+    createdAt: item.createdAt,
+  }));
+
+  return [...transactions, ...transfers]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 6);
+}
+
 const styles = StyleSheet.create({
   screen: {
     paddingBottom: spacing.xxl,
@@ -360,6 +469,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
+  primaryAction: {
+    minHeight: 58,
+  },
+  primaryActionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  primaryActionText: {
+    color: colors.background,
+    fontWeight: '800',
+  },
   metric: {
     flex: 1,
     gap: spacing.xs,
@@ -372,7 +493,7 @@ const styles = StyleSheet.create({
   },
   quickButton: {
     flex: 1,
-    minHeight: 68,
+    minHeight: 60,
     borderRadius: radius.lg,
   },
   quickContent: {
@@ -401,18 +522,27 @@ const styles = StyleSheet.create({
   actionText: {
     color: colors.primary,
   },
-  accountTile: {
+  accountSummaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  accountSummaryTile: {
+    width: '48.5%',
     borderRadius: radius.md,
-    padding: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    gap: spacing.xs,
+  },
+  accountSummaryTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  accountIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  accountBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },

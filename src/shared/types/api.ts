@@ -1,5 +1,6 @@
 export type AccountType = 'CASH' | 'BANK' | 'WALLET' | 'OTHER';
 export type CategoryType = 'INCOME' | 'EXPENSE';
+export type CategoryTag = 'GENERAL' | 'FIXED' | 'ESSENTIAL' | 'DISCRETIONARY';
 export type TransactionType = 'INCOME' | 'EXPENSE';
 export type LedgerDirection = 'CREDIT' | 'DEBIT';
 export type LedgerReferenceType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TRANSFER_FEE' | 'OPENING_BALANCE' | 'MANUAL_ADJUSTMENT';
@@ -76,9 +77,11 @@ export interface Category {
   userId: number | null;
   name: string;
   type: CategoryType;
+  tag?: CategoryTag;
   icon?: string | null;
   color?: string | null;
   defaultCategory: boolean;
+  active?: boolean;
   createdAt: string;
 }
 

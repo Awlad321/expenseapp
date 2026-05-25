@@ -1,6 +1,7 @@
 import { StyleSheet, View, ViewStyle } from 'react-native';
 import { PrimaryButton } from './PrimaryButton';
 import { spacing } from '../theme/theme';
+import { useResponsiveLayout } from '../layout/responsive';
 
 export interface SegmentOption {
   label: string;
@@ -20,8 +21,10 @@ export function SegmentedControl({
   style?: ViewStyle;
   compact?: boolean;
 }) {
+  const layout = useResponsiveLayout();
+
   return (
-    <View style={[styles.row, style]}>
+    <View style={[styles.row, layout.compact && styles.compactRow, style]}>
       {options.map((option) => (
         <PrimaryButton
           key={option.value}
@@ -41,6 +44,9 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  compactRow: {
+    gap: spacing.xs,
   },
   button: {
     flex: 1,

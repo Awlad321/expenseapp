@@ -3,6 +3,7 @@ import { RefreshControl, ScrollView, StyleSheet, View, ViewStyle } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, spacing } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
+import { useResponsiveLayout } from '../layout/responsive';
 
 interface ScreenProps {
   children: ReactNode;
@@ -14,7 +15,24 @@ interface ScreenProps {
 
 export function Screen({ children, scroll = true, style, refreshing = false, onRefresh }: ScreenProps) {
   const theme = useTheme();
-  const content = <View style={[styles.content, style]}>{children}</View>;
+  const layout = useResponsiveLayout();
+  const content = (
+    <View
+      style={[
+        styles.content,
+        {
+          padding: layout.contentPadding,
+          gap: layout.sectionGap,
+          maxWidth: layout.maxContentWidth,
+          alignSelf: 'center',
+          width: '100%',
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]}>
       {scroll ? (

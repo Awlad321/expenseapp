@@ -5,6 +5,7 @@ import { AppText } from './AppText';
 import { colors, radius, spacing } from '../theme/theme';
 import { today } from '../utils/format';
 import { useTheme } from '../theme/ThemeContext';
+import { useResponsiveLayout } from '../layout/responsive';
 
 interface DatePickerFieldProps {
   label: string;
@@ -18,6 +19,7 @@ const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'Jul
 
 export function DatePickerField({ label, value, onChange, error }: DatePickerFieldProps) {
   const theme = useTheme();
+  const layout = useResponsiveLayout();
   const [visible, setVisible] = useState(false);
   const selectedDate = parseDate(value) ?? parseDate(today())!;
   const [visibleMonth, setVisibleMonth] = useState(() => new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1));
@@ -41,7 +43,7 @@ export function DatePickerField({ label, value, onChange, error }: DatePickerFie
   return (
       <View style={styles.wrap}>
       <AppText variant="small" muted>{label}</AppText>
-      <Pressable onPress={open} style={[styles.input, { backgroundColor: theme.colors.surface, borderColor: error ? theme.colors.danger : theme.colors.border }]}>
+      <Pressable onPress={open} style={[styles.input, { minHeight: layout.inputHeight, paddingHorizontal: layout.compact ? spacing.md : spacing.lg, backgroundColor: theme.colors.surface, borderColor: error ? theme.colors.danger : theme.colors.border }]}>
         <AppText>{value}</AppText>
         <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
       </Pressable>
@@ -49,16 +51,16 @@ export function DatePickerField({ label, value, onChange, error }: DatePickerFie
 
       <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
         <View style={[styles.backdrop, { backgroundColor: theme.scheme === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(7,17,19,0.28)' }]}>
-          <View style={[styles.panel, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <View style={[styles.panel, { width: '100%', maxWidth: layout.tablet ? 520 : 420, padding: layout.compact ? spacing.md : spacing.lg, backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
             <View style={styles.header}>
-              <Pressable onPress={() => moveMonth(-1)} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+              <Pressable onPress={() => moveMonth(-1)} style={[styles.iconButton, { width: layout.iconButtonSize, height: layout.iconButtonSize, backgroundColor: theme.colors.surfaceMuted }]}>
                 <Ionicons name="chevron-back" size={22} color={theme.colors.text} />
               </Pressable>
               <View style={styles.monthTitle}>
                 <AppText variant="h2">{monthNames[visibleMonth.getMonth()]}</AppText>
                 <AppText variant="small" muted>{visibleMonth.getFullYear()}</AppText>
               </View>
-              <Pressable onPress={() => moveMonth(1)} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+              <Pressable onPress={() => moveMonth(1)} style={[styles.iconButton, { width: layout.iconButtonSize, height: layout.iconButtonSize, backgroundColor: theme.colors.surfaceMuted }]}>
                 <Ionicons name="chevron-forward" size={22} color={theme.colors.text} />
               </Pressable>
             </View>
@@ -84,6 +86,7 @@ export function DatePickerField({ label, value, onChange, error }: DatePickerFie
                   >
                     <View style={[
                       styles.dayBadge,
+                      { width: layout.compact ? 34 : 38, height: layout.compact ? 34 : 38, borderRadius: layout.compact ? 17 : 19 },
                       selected && { backgroundColor: theme.colors.primary },
                       isToday && !selected && { borderWidth: 1, borderColor: theme.colors.primary },
                     ]}>

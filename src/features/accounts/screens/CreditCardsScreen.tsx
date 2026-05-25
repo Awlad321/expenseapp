@@ -17,11 +17,13 @@ import type { Account, Category, CreditCard, CreditCardActivity } from '../../..
 import { accountService } from '../services/accountService';
 import { creditCardService } from '../services/creditCardService';
 import { categoryService } from '../../categories/services/categoryService';
+import { useResponsiveLayout } from '../../../shared/layout/responsive';
 
 type ModalMode = 'CARD' | 'SPEND' | 'PAY' | 'CATEGORY' | null;
 
 export function CreditCardsScreen() {
   const theme = useTheme();
+  const layout = useResponsiveLayout();
   const [cards, setCards] = useState<CreditCard[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -176,7 +178,7 @@ export function CreditCardsScreen() {
             <AppText variant="small" muted>Total card debt</AppText>
             <AppText variant="title" style={{ color: totalDebt > 0 ? colors.expense : colors.income }}>{formatMoney(totalDebt)}</AppText>
           </View>
-          <View style={[styles.summaryIcon, { backgroundColor: theme.colors.surfaceMuted }]}>
+          <View style={[styles.summaryIcon, { width: layout.compact ? 48 : 56, height: layout.compact ? 48 : 56, borderRadius: layout.compact ? 24 : 28, backgroundColor: theme.colors.surfaceMuted }]}>
             <Ionicons name="card-outline" size={28} color={theme.colors.accent} />
           </View>
         </View>
@@ -199,7 +201,7 @@ export function CreditCardsScreen() {
             </View>
             <View style={styles.cardActions}>
               <AppText style={{ color: card.outstandingBalance > 0 ? colors.expense : colors.income }}>{formatMoney(card.outstandingBalance)}</AppText>
-              <Pressable onPress={() => startCardEdit(card)} style={styles.editButton}>
+              <Pressable onPress={() => startCardEdit(card)} style={[styles.editButton, { width: layout.compact ? 32 : 34, height: layout.compact ? 32 : 34, borderRadius: layout.compact ? 16 : 17 }]}>
                 <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
               </Pressable>
             </View>
@@ -233,7 +235,7 @@ export function CreditCardsScreen() {
                 {activity.type === 'PAYMENT' ? '-' : '+'}{formatMoney(activity.amount)}
               </AppText>
               <AppText variant="small" muted>Debt {formatMoney(activity.balanceAfter)}</AppText>
-              <Pressable onPress={() => startActivityEdit(activity)} style={styles.editButton}>
+              <Pressable onPress={() => startActivityEdit(activity)} style={[styles.editButton, { width: layout.compact ? 32 : 34, height: layout.compact ? 32 : 34, borderRadius: layout.compact ? 16 : 17 }]}>
                 <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
               </Pressable>
             </View>
@@ -244,7 +246,7 @@ export function CreditCardsScreen() {
 
       <Modal visible={mode !== null} transparent animationType="fade" onRequestClose={() => resetModal(null)}>
         <View style={[styles.backdrop, { backgroundColor: theme.scheme === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(7,17,19,0.28)' }]}>
-          <View style={[styles.panel, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <View style={[styles.panel, { width: '100%', maxWidth: layout.tablet ? 560 : 440, padding: layout.compact ? spacing.md : spacing.lg, backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
             <View style={styles.modalHeader}>
               <AppText variant="h2">
                 {mode === 'CARD'
@@ -372,7 +374,7 @@ const styles = StyleSheet.create({
   },
   cardTop: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.md,
   },
@@ -401,7 +403,7 @@ const styles = StyleSheet.create({
   },
   activityRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.md,
     paddingVertical: spacing.sm,

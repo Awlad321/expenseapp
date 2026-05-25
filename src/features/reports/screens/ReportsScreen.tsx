@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, Platform, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Platform, StyleSheet, View } from 'react-native';
 import { documentDirectory, StorageAccessFramework, writeAsStringAsync } from 'expo-file-system/legacy';
 import { useFocusEffect } from '@react-navigation/native';
 import { BarChart, LineChart } from 'react-native-chart-kit';
@@ -15,13 +15,15 @@ import { currentMonth, formatMoney, today } from '../../../shared/utils/format';
 import type { DashboardSummary, Transaction } from '../../../shared/types/api';
 import { backupService } from '../../../services/api/backupService';
 import { dashboardService } from '../../dashboard/services/dashboardService';
+import { categoryService } from '../../categories/services/categoryService';
 import { transactionService } from '../../transactions/services/transactionService';
 import { useTheme } from '../../../shared/theme/ThemeContext';
 import type { AppColors } from '../../../shared/theme/theme';
+import type { Category } from '../../../shared/types/api';
+import { useResponsiveLayout } from '../../../shared/layout/responsive';
 
 type ReportPeriod = 'day' | 'month' | 'year';
 
-const chartWidth = Math.max(Dimensions.get('window').width - 64, 280);
 const monthLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const periodOptions = [
   { label: 'Day', value: 'day' },
@@ -30,12 +32,14 @@ const periodOptions = [
 ];
 export function ReportsScreen() {
   const theme = useTheme();
+  const layout = useResponsiveLayout();
   const [period, setPeriod] = useState<ReportPeriod>('month');
   const [selectedDate, setSelectedDate] = useState(today());
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -49,6 +53,7 @@ export function ReportsScreen() {
       ]);
       setSummary(summaryData);
       setTransactions(transactionData);
+      setCategories(await categoryService.list('EXPENSE', { includeInactive: true }));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -84,8 +89,8 @@ export function ReportsScreen() {
     }
   }
 
-  const report = buildReport(transactions, period, selectedDate, selectedMonth, selectedYear);
-  const insights = buildInsights(report, period, theme.colors);
+  const report = buildReport(transactions, categories, period, selectedDate, selectedMonth, selectedYear);
+  const insights = buildInsights(report, period, theme.colors, summary);
   const chartConfig = {
     backgroundGradientFrom: theme.colors.card,
     backgroundGradientTo: theme.colors.card,
@@ -135,10 +140,9 @@ export function ReportsScreen() {
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
-      <Header title="Reports" subtitle={`${periodLabel(period)} finance overview`} />
-      <PrimaryButton loading={exporting} onPress={exportCsv}>Export CSV</PrimaryButton>
+      <Header title="Insights" subtitle={`${periodLabel(period)} money decisions`} />
       <Card>
-        <AppText variant="h2">Report period</AppText>
+        <AppText variant="h2">Insight period</AppText>
         <SegmentedControl compact options={periodOptions} value={period} onChange={(nextPeriod) => setPeriod(nextPeriod as ReportPeriod)} />
         {period === 'day' ? (
           <DatePickerField label="Day" value={selectedDate} onChange={setSelectedDate} />
@@ -148,20 +152,11 @@ export function ReportsScreen() {
           <YearSelector year={selectedYear} onChange={setSelectedYear} />
         )}
       </Card>
-      <Card>
-        <AppText variant="h2">Data backup</AppText>
-        <AppText muted>Choose a phone folder outside the app. Daily backup runs after 3 AM when the app is opened or running.</AppText>
-        <View style={styles.backupActions}>
-          <PrimaryButton loading={backupBusy} onPress={configureBackup} style={styles.backupButton}>Choose Folder</PrimaryButton>
-          <PrimaryButton variant="secondary" loading={backupBusy} onPress={backupNow} style={styles.backupButton}>Backup Now</PrimaryButton>
-        </View>
-        <PrimaryButton variant="secondary" loading={backupBusy} onPress={restoreBackup}>Restore Latest Backup</PrimaryButton>
-      </Card>
       {loading ? <ActivityIndicator color={theme.colors.primary} /> : null}
       {!loading ? (
         <>
           <Card>
-            <AppText variant="h2">Smart insights</AppText>
+            <AppText variant="h2">What needs attention</AppText>
             {insights.map((insight) => (
               <View key={insight.label} style={[styles.insightRow, { backgroundColor: theme.colors.surface }]}>
                 <View style={[styles.insightDot, { backgroundColor: insight.color }]} />
@@ -172,29 +167,14 @@ export function ReportsScreen() {
               </View>
             ))}
           </Card>
-          <Card>
-            <AppText variant="h2">Income vs expense</AppText>
-            <BarChart
-              data={{
-                labels: ['Income', 'Expense'],
-                datasets: [{ data: [report.totalIncome, report.totalExpense], colors: [() => theme.colors.income, () => theme.colors.expense] }],
-              }}
-              width={chartWidth}
-              height={210}
-              yAxisLabel="৳"
-              yAxisSuffix=""
-              chartConfig={chartConfig}
-              fromZero
-              showValuesOnTopOfBars
-              withCustomBarColorFromData
-              flatColor
-              style={styles.chart}
-            />
-            <View style={styles.row}>
-              <AppText>Savings</AppText>
-              <AppText style={{ color: report.savings >= 0 ? theme.colors.income : theme.colors.expense }}>{formatMoney(report.savings)}</AppText>
+          {summary ? <Card>
+            <AppText variant="h2">Position snapshot</AppText>
+            <View style={styles.snapshotGrid}>
+              <SnapshotTile label="Usable cash" value={formatMoney(summary.remainingBalance ?? summary.totalBalance)} color={theme.colors.income} />
+              <SnapshotTile label="Today spent" value={formatMoney(summary.todayExpense ?? 0)} color={theme.colors.expense} />
+              <SnapshotTile label="Net movement" value={formatMoney(report.savings)} color={report.savings >= 0 ? theme.colors.income : theme.colors.expense} />
             </View>
-          </Card>
+          </Card> : null}
           <Card>
             <AppText variant="h2">{period === 'day' ? 'Day total' : 'Expense trend'}</AppText>
             <LineChart
@@ -202,7 +182,7 @@ export function ReportsScreen() {
                 labels: report.trendLabels,
                 datasets: [{ data: report.expenseTrend }],
               }}
-              width={chartWidth}
+              width={layout.chartWidth}
               height={220}
               yAxisLabel="৳"
               yAxisSuffix=""
@@ -217,12 +197,37 @@ export function ReportsScreen() {
           </Card>
           <Card>
             <AppText variant="h2">Top spending categories</AppText>
+            <BarChart
+              data={{
+                labels: ['Income', 'Expense'],
+                datasets: [{ data: [report.totalIncome, report.totalExpense], colors: [() => theme.colors.income, () => theme.colors.expense] }],
+              }}
+              width={layout.chartWidth}
+              height={180}
+              yAxisLabel="৳"
+              yAxisSuffix=""
+              chartConfig={chartConfig}
+              fromZero
+              showValuesOnTopOfBars
+              withCustomBarColorFromData
+              flatColor
+              style={styles.chart}
+            />
             {report.expenseByCategory.length === 0 ? <AppText muted>No category spending yet.</AppText> : report.expenseByCategory.slice(0, 6).map((item) => (
               <Bar key={item.category} label={item.category} value={item.amount} max={Math.max(...report.expenseByCategory.map((category) => category.amount), 1)} color={theme.colors.expense} />
             ))}
           </Card>
+          <Card>
+            <AppText variant="h2">Expense mix</AppText>
+            <View style={styles.snapshotGrid}>
+              <SnapshotTile label="Fixed" value={formatMoney(report.expenseByTag.FIXED)} color={theme.colors.warning} />
+              <SnapshotTile label="Essential" value={formatMoney(report.expenseByTag.ESSENTIAL)} color={theme.colors.accent} />
+              <SnapshotTile label="Optional" value={formatMoney(report.expenseByTag.DISCRETIONARY)} color={theme.colors.expense} />
+            </View>
+            <AppText variant="small" muted>General expense categories remain outside the tagged buckets.</AppText>
+          </Card>
           {summary ? <Card>
-            <AppText variant="h2">Account balance summary</AppText>
+            <AppText variant="h2">Accounts at a glance</AppText>
             {summary.accountBalances.map((item) => (
               <View key={item.accountId} style={styles.row}>
                 <AppText>{item.accountName}</AppText>
@@ -230,6 +235,18 @@ export function ReportsScreen() {
               </View>
             ))}
           </Card> : null}
+          <Card>
+            <AppText variant="h2">Data & backup</AppText>
+            <AppText muted>Export month data or write a device backup outside the app storage.</AppText>
+            <View style={styles.backupActions}>
+              <PrimaryButton loading={exporting} onPress={exportCsv} style={styles.backupButton}>Export CSV</PrimaryButton>
+              <PrimaryButton loading={backupBusy} onPress={configureBackup} style={styles.backupButton}>Choose Folder</PrimaryButton>
+            </View>
+            <View style={styles.backupActions}>
+              <PrimaryButton variant="secondary" loading={backupBusy} onPress={backupNow} style={styles.backupButton}>Backup Now</PrimaryButton>
+              <PrimaryButton variant="secondary" loading={backupBusy} onPress={restoreBackup} style={styles.backupButton}>Restore Latest</PrimaryButton>
+            </View>
+          </Card>
         </>
       ) : null}
     </Screen>
@@ -267,14 +284,28 @@ function YearSelector({ year, onChange }: { year: number; onChange: (year: numbe
   );
 }
 
-function buildReport(transactions: Transaction[], period: ReportPeriod, selectedDate: string, selectedMonth: string, selectedYear: number) {
+function buildReport(transactions: Transaction[], categories: Category[], period: ReportPeriod, selectedDate: string, selectedMonth: string, selectedYear: number) {
   const filtered = transactions.filter((transaction) => {
     if (period === 'day') return transaction.transactionDate === selectedDate;
     if (period === 'month') return transaction.transactionDate.startsWith(selectedMonth);
     return transaction.transactionDate.startsWith(`${selectedYear}`);
   });
+  const expenseCategoryMap = new Map(categories.map((category) => [category.id, category]));
   const totalIncome = sumByType(filtered, 'INCOME');
   const totalExpense = sumByType(filtered, 'EXPENSE');
+  const expenseByTag = filtered
+    .filter((transaction) => transaction.type === 'EXPENSE')
+    .reduce((totals, transaction) => {
+      const category = expenseCategoryMap.get(transaction.categoryId);
+      const tag = category?.tag ?? 'GENERAL';
+      totals[tag] += transaction.amount;
+      return totals;
+    }, {
+      GENERAL: 0,
+      FIXED: 0,
+      ESSENTIAL: 0,
+      DISCRETIONARY: 0,
+    });
   const expenseByCategory = Array.from(
     filtered
       .filter((transaction) => transaction.type === 'EXPENSE')
@@ -290,20 +321,26 @@ function buildReport(transactions: Transaction[], period: ReportPeriod, selected
     totalExpense,
     savings: totalIncome - totalExpense,
     expenseByCategory,
+    expenseByTag,
     trendLabels: labels,
     expenseTrend: values,
     transactionCount: filtered.length,
   };
 }
 
-function buildInsights(report: ReturnType<typeof buildReport>, period: ReportPeriod, palette: AppColors) {
+function buildInsights(report: ReturnType<typeof buildReport>, period: ReportPeriod, palette: AppColors, summary: DashboardSummary | null) {
   const topCategory = report.expenseByCategory[0];
-  const savingsRate = report.totalIncome > 0 ? Math.round((report.savings / report.totalIncome) * 100) : 0;
   const highestExpense = Math.max(...report.expenseTrend, 0);
+  const taggedEntries = [
+    { label: 'Fixed burden', value: report.expenseByTag.FIXED, color: palette.warning },
+    { label: 'Essential spend', value: report.expenseByTag.ESSENTIAL, color: palette.accent },
+    { label: 'Optional spend', value: report.expenseByTag.DISCRETIONARY, color: palette.expense },
+  ].filter((item) => item.value > 0);
+  const dominantTagged = taggedEntries.sort((a, b) => b.value - a.value)[0];
   return [
     {
-      label: report.savings >= 0 ? 'Positive savings' : 'Overspent',
-      value: report.totalIncome > 0 ? `${savingsRate}% savings rate for this ${period}` : 'Add income to see savings rate',
+      label: report.savings >= 0 ? 'You stayed cash-positive' : 'You overspent',
+      value: report.totalIncome > 0 ? `${formatMoney(report.savings)} net for this ${period}` : 'Add income to measure net movement',
       color: report.savings >= 0 ? palette.income : palette.expense,
     },
     {
@@ -312,11 +349,26 @@ function buildInsights(report: ReturnType<typeof buildReport>, period: ReportPer
       color: palette.expense,
     },
     {
-      label: report.transactionCount === 0 ? 'No activity' : `${report.transactionCount} entries`,
-      value: highestExpense > 0 ? `Highest trend point: ${formatMoney(highestExpense)}` : 'Your selected period is calm',
-      color: palette.accent,
+      label: dominantTagged ? `${dominantTagged.label} is leading` : report.transactionCount === 0 ? 'No activity' : `${report.transactionCount} entries`,
+      value: dominantTagged
+        ? `${formatMoney(dominantTagged.value)} across tagged expense categories`
+        : highestExpense > 0
+          ? `Highest trend point: ${formatMoney(highestExpense)}`
+          : summary
+            ? `Usable cash at ${formatMoney(summary.remainingBalance ?? summary.totalBalance)}`
+            : 'Your selected period is calm',
+      color: dominantTagged ? dominantTagged.color : palette.accent,
     },
   ];
+}
+
+function SnapshotTile({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <View style={styles.snapshotTile}>
+      <AppText variant="small" muted>{label}</AppText>
+      <AppText style={{ color }}>{value}</AppText>
+    </View>
+  );
 }
 
 function buildExpenseTrend(transactions: Transaction[], period: ReportPeriod, selectedDate: string, selectedMonth: string, selectedYear: number) {
@@ -447,12 +499,22 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
+  snapshotGrid: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  snapshotTile: {
+    flex: 1,
+    gap: spacing.xs,
+  },
   backupActions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   backupButton: {
     flex: 1,
+    minWidth: 140,
   },
   insightRow: {
     borderRadius: 14,

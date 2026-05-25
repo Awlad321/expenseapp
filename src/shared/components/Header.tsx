@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AppText } from './AppText';
 import { colors, spacing } from '../theme/theme';
 import { useTheme } from '../theme/ThemeContext';
+import { useResponsiveLayout } from '../layout/responsive';
 
 interface HeaderProps {
   title: string;
@@ -13,6 +14,7 @@ interface HeaderProps {
 
 export function Header({ title, subtitle, rightIcon, onRightPress }: HeaderProps) {
   const theme = useTheme();
+  const layout = useResponsiveLayout();
 
   async function toggleTheme() {
     await theme.setPreference(theme.scheme === 'dark' ? 'light' : 'dark');
@@ -25,11 +27,11 @@ export function Header({ title, subtitle, rightIcon, onRightPress }: HeaderProps
         {subtitle ? <AppText muted>{subtitle}</AppText> : null}
       </View>
       <View style={styles.actions}>
-        <Pressable onPress={toggleTheme} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+        <Pressable onPress={toggleTheme} style={[styles.iconButton, { width: layout.iconButtonSize, height: layout.iconButtonSize, borderRadius: layout.iconButtonSize / 2, backgroundColor: theme.colors.surfaceMuted }]}>
           <Ionicons name={theme.scheme === 'dark' ? 'sunny-outline' : 'moon-outline'} size={22} color={theme.colors.text} />
         </Pressable>
         {rightIcon ? (
-          <Pressable onPress={onRightPress} style={[styles.iconButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+          <Pressable onPress={onRightPress} style={[styles.iconButton, { width: layout.iconButtonSize, height: layout.iconButtonSize, borderRadius: layout.iconButtonSize / 2, backgroundColor: theme.colors.surfaceMuted }]}>
             <Ionicons name={rightIcon} size={22} color={theme.colors.text} />
           </Pressable>
         ) : null}
@@ -52,6 +54,7 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
+    alignItems: 'flex-start',
   },
   iconButton: {
     width: 44,

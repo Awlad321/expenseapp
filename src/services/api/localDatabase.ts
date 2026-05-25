@@ -5,6 +5,7 @@ import type {
   AccountType,
   AuthResponse,
   Category,
+  CategoryTag,
   CategoryType,
   CreditCard,
   CreditCardActivity,
@@ -42,6 +43,14 @@ export interface AccountPayload {
 export interface CategoryPayload {
   name: string;
   type: CategoryType;
+  tag?: CategoryTag;
+  icon?: string | null;
+  color?: string | null;
+}
+
+export interface UpdateCategoryPayload {
+  name: string;
+  tag?: CategoryTag;
   icon?: string | null;
   color?: string | null;
 }
@@ -217,10 +226,11 @@ export const localDatabase = {
     return db.ledger.filter((entry) => entry.accountId === accountId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
 
-  async listCategories(type?: CategoryType) {
+  async listCategories(type?: CategoryType, options?: { includeInactive?: boolean }) {
     const db = await readDb();
     return db.categories
       .filter((category) => !type || category.type === type)
+      .filter((category) => options?.includeInactive ? true : category.active !== false)
       .sort((a, b) => Number(b.defaultCategory) - Number(a.defaultCategory) || a.name.localeCompare(b.name));
   },
 
@@ -238,13 +248,87 @@ export const localDatabase = {
         userId: 1,
         name,
         type: payload.type,
+        tag: normalizeCategoryTag(payload.tag),
         icon: payload.icon ?? null,
         color: payload.color ?? null,
         defaultCategory: false,
+        active: true,
         createdAt: now(),
       };
       db.categories.push(category);
       return category;
+    });
+  },
+
+  async updateCategory(id: number, payload: UpdateCategoryPayload) {
+    return mutateDb((db) => {
+      const category = getCategoryById(db, id);
+      const name = requiredCategoryName(payload.name);
+      if (db.categories.some((item) => item.id !== id && item.type === category.type && categoryKey(item.name, item.type) === categoryKey(name, category.type))) {
+        throw new Error('Category already exists');
+      }
+
+      category.name = name;
+      category.tag = normalizeCategoryTag(payload.tag ?? category.tag);
+      category.icon = payload.icon ?? category.icon ?? null;
+      category.color = payload.color ?? category.color ?? null;
+
+      db.transactions.forEach((transaction) => {
+        if (transaction.categoryId === category.id) {
+          transaction.categoryName = category.name;
+          transaction.updatedAt = now();
+        }
+      });
+
+      db.creditCardActivities.forEach((activity) => {
+        if (activity.categoryId === category.id) {
+          activity.categoryName = category.name;
+        }
+      });
+
+      return category;
+    });
+  },
+
+  async archiveCategory(id: number) {
+    return mutateDb((db) => {
+      const category = getCategoryById(db, id);
+      if (category.defaultCategory) {
+        throw new Error('Default categories cannot be archived');
+      }
+      category.active = false;
+      return category;
+    });
+  },
+
+  async mergeCategories(sourceId: number, targetId: number) {
+    return mutateDb((db) => {
+      const source = getCategoryById(db, sourceId);
+      const target = getCategoryById(db, targetId);
+      if (source.id === target.id) {
+        throw new Error('Choose a different category to merge into');
+      }
+      if (source.type !== target.type) {
+        throw new Error('Only categories of the same type can be merged');
+      }
+
+      db.transactions.forEach((transaction) => {
+        if (transaction.categoryId === source.id) {
+          transaction.categoryId = target.id;
+          transaction.categoryName = target.name;
+          transaction.updatedAt = now();
+        }
+      });
+
+      db.creditCardActivities.forEach((activity) => {
+        if (activity.categoryId === source.id) {
+          activity.categoryId = target.id;
+          activity.categoryName = target.name;
+        }
+      });
+
+      source.active = false;
+      return target;
     });
   },
 
@@ -760,6 +844,8 @@ function createEmptyDb(): LocalDatabase {
       icon: null,
       color: null,
       defaultCategory: category.defaultCategory,
+      tag: 'GENERAL',
+      active: true,
       createdAt: now(),
     })),
     transactions: [],
@@ -786,10 +872,10 @@ function normalizeDb(db: LocalDatabase): LocalDatabase {
   return normalized;
 }
 
-function normalizeCategories(existingCategories: Category[], fallbackNextId: number) {
+function normalizeCategories(existingCategories: Category[], fallbackNextId: number): Category[] {
   let next = Math.max(fallbackNextId, ...existingCategories.map((category) => category.id), defaultCategories.length) + 1;
 
-  const normalizedDefaults = defaultCategories.map((defaultCategory) => {
+  const normalizedDefaults: Category[] = defaultCategories.map((defaultCategory) => {
     const existing = existingCategories.find((category) => categoryKey(category.name, category.type) === categoryKey(defaultCategory.name, defaultCategory.type));
     if (existing) {
       return {
@@ -797,6 +883,8 @@ function normalizeCategories(existingCategories: Category[], fallbackNextId: num
         name: defaultCategory.name,
         type: defaultCategory.type,
         defaultCategory: true,
+        tag: normalizeCategoryTag(existing.tag),
+        active: existing.active ?? true,
       };
     }
 
@@ -805,21 +893,25 @@ function normalizeCategories(existingCategories: Category[], fallbackNextId: num
       userId: null,
       name: defaultCategory.name,
       type: defaultCategory.type,
+      tag: 'GENERAL',
       icon: null,
       color: null,
       defaultCategory: true,
+      active: true,
       createdAt: now(),
     };
   });
 
   const defaultKeys = new Set(defaultCategories.map((category) => categoryKey(category.name, category.type)));
-  const customCategories = existingCategories
+  const customCategories: Category[] = existingCategories
     .filter((category) => !defaultKeys.has(categoryKey(category.name, category.type)))
     .filter((category, index, categories) => categories.findIndex((item) => categoryKey(item.name, item.type) === categoryKey(category.name, category.type)) === index)
-    .map((category) => ({
+    .map((category): Category => ({
       ...category,
       name: category.name.trim(),
       defaultCategory: false,
+      tag: normalizeCategoryTag(category.tag),
+      active: category.active ?? true,
     }))
     .filter((category) => category.name.length > 0);
 
@@ -858,6 +950,12 @@ function getAccount(db: LocalDatabase, id: number) {
 
 function getCategory(db: LocalDatabase, id: number, type: CategoryType) {
   const category = db.categories.find((item) => item.id === id && item.type === type);
+  if (!category) throw new Error('Category not found');
+  return category;
+}
+
+function getCategoryById(db: LocalDatabase, id: number) {
+  const category = db.categories.find((item) => item.id === id);
   if (!category) throw new Error('Category not found');
   return category;
 }
@@ -1002,6 +1100,17 @@ function requiredName(value: string, label: string) {
   const name = value.trim();
   if (name.length < 2) throw new Error(`${label} is required`);
   return name;
+}
+
+function requiredCategoryName(value: string) {
+  return requiredName(value, 'Category name');
+}
+
+function normalizeCategoryTag(value?: CategoryTag) {
+  if (value === 'FIXED' || value === 'ESSENTIAL' || value === 'DISCRETIONARY') {
+    return value;
+  }
+  return 'GENERAL';
 }
 
 function validDate(value: string) {

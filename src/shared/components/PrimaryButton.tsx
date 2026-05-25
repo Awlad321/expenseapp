@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleProp, StyleSheet, ViewStyle } from '
 import { colors, radius, spacing } from '../theme/theme';
 import { AppText } from './AppText';
 import { useTheme } from '../theme/ThemeContext';
+import { useResponsiveLayout } from '../layout/responsive';
 
 interface PrimaryButtonProps {
   children: ReactNode;
@@ -16,6 +17,7 @@ interface PrimaryButtonProps {
 
 export function PrimaryButton({ children, onPress, loading, disabled, compact, variant = 'primary', style }: PrimaryButtonProps) {
   const theme = useTheme();
+  const layout = useResponsiveLayout();
   const backgroundColor = variant === 'primary'
     ? theme.colors.primary
     : variant === 'secondary'
@@ -30,7 +32,15 @@ export function PrimaryButton({ children, onPress, loading, disabled, compact, v
       android_ripple={{ color: withOpacity(labelColor, 0.14), borderless: false }}
       disabled={loading || disabled}
       onPress={onPress}
-      style={({ pressed }) => [styles.button, compact && styles.compactButton, { backgroundColor }, (loading || disabled) && styles.disabled, pressed && styles.pressed, style]}
+      style={({ pressed }) => [
+        styles.button,
+        { minHeight: compact ? layout.compactButtonHeight : layout.buttonHeight },
+        compact && styles.compactButton,
+        { backgroundColor },
+        (loading || disabled) && styles.disabled,
+        pressed && styles.pressed,
+        style,
+      ]}
     >
       {loading ? <ActivityIndicator color={labelColor} /> : <AppText variant={compact ? 'small' : 'body'} style={[styles.label, { color: labelColor }]}>{children}</AppText>}
     </Pressable>

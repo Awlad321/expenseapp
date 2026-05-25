@@ -14,10 +14,12 @@ import { colors, spacing } from '../../../shared/theme/theme';
 import { currentMonth, formatMoney } from '../../../shared/utils/format';
 import type { Transfer } from '../../../shared/types/api';
 import { transferService } from '../services/transferService';
+import { useResponsiveLayout } from '../../../shared/layout/responsive';
 
 type Props = NativeStackScreenProps<TransfersStackParamList, 'TransferList'>;
 
 export function TransferListScreen({ navigation }: Props) {
+  const layout = useResponsiveLayout();
   const [items, setItems] = useState<Transfer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -56,7 +58,7 @@ export function TransferListScreen({ navigation }: Props) {
             </View>
             <View style={styles.right}>
               <AppText>{formatMoney(item.amount)}</AppText>
-              <Pressable onPress={() => navigation.navigate('AddTransfer', { transferId: item.id })} style={styles.editButton}>
+              <Pressable onPress={() => navigation.navigate('AddTransfer', { transferId: item.id })} style={[styles.editButton, { width: layout.compact ? 32 : 34, height: layout.compact ? 32 : 34, borderRadius: layout.compact ? 16 : 17 }]}>
                 <Ionicons name="create-outline" size={18} color={colors.primary} />
               </Pressable>
             </View>
@@ -70,7 +72,7 @@ export function TransferListScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.md,
   },
   copy: {

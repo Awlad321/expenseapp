@@ -11,8 +11,9 @@ export type DashboardStackParamList = {
 
 export type TransactionsStackParamList = {
   TransactionList: undefined;
-  AddIncome: { transactionId?: number } | undefined;
-  AddExpense: { transactionId?: number } | undefined;
+  AddIncome: { transactionId?: number; duplicateTransactionId?: number } | undefined;
+  AddExpense: { transactionId?: number; duplicateTransactionId?: number } | undefined;
+  ManageCategories: { type?: 'INCOME' | 'EXPENSE' } | undefined;
 };
 
 export type TransfersStackParamList = {

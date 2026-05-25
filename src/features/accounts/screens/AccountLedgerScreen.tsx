@@ -16,12 +16,14 @@ import { colors, radius, spacing } from '../../../shared/theme/theme';
 import { formatMoney, currentMonth, today } from '../../../shared/utils/format';
 import type { AccountLedger } from '../../../shared/types/api';
 import { accountService } from '../services/accountService';
+import { useResponsiveLayout } from '../../../shared/layout/responsive';
 
 type Props = NativeStackScreenProps<AccountsStackParamList, 'AccountLedger'>;
 type LedgerView = 'day' | 'month' | 'year';
 
 export function AccountLedgerScreen({ route, navigation }: Props) {
   const { accountId, accountName } = route.params;
+  const layout = useResponsiveLayout();
   const [items, setItems] = useState<AccountLedger[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -106,7 +108,7 @@ export function AccountLedgerScreen({ route, navigation }: Props) {
             return (
               <View key={item.id} style={styles.row}>
                 <View style={styles.left}>
-                  <View style={[styles.icon, { backgroundColor: credit ? 'rgba(54,211,153,0.13)' : 'rgba(255,122,122,0.13)' }]}>
+                  <View style={[styles.icon, { width: layout.compact ? 40 : 44, height: layout.compact ? 40 : 44, borderRadius: layout.compact ? 20 : 22, backgroundColor: credit ? 'rgba(54,211,153,0.13)' : 'rgba(255,122,122,0.13)' }]}>
                     <Ionicons name={credit ? 'add-circle-outline' : 'remove-circle-outline'} size={22} color={credit ? colors.income : colors.expense} />
                   </View>
                   <View style={styles.copy}>
@@ -237,7 +239,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.md,
     paddingVertical: spacing.sm,
