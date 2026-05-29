@@ -9,6 +9,7 @@ import { TransfersNavigator } from './TransfersNavigator';
 import { AccountsNavigator } from './AccountsNavigator';
 import { ReportsNavigator } from './ReportsNavigator';
 import { CreditCardsNavigator } from './CreditCardsNavigator';
+import { DebtsNavigator } from './DebtsNavigator';
 import { useTheme } from '../../shared/theme/ThemeContext';
 import { useResponsiveLayout } from '../../shared/layout/responsive';
 
@@ -19,6 +20,7 @@ const icons = {
   Transactions: 'receipt-outline',
   Transfer: 'swap-horizontal-outline',
   Accounts: 'wallet-outline',
+  Debts: 'people-outline',
   Cards: 'card-outline',
   Reports: 'stats-chart-outline',
 } as const;
@@ -33,6 +35,7 @@ export function AppTabNavigator() {
     Transactions: 'Activity',
     Transfer: 'Move',
     Accounts: 'Accounts',
+    Debts: 'Debt',
     Cards: 'Cards',
     Reports: 'Insights',
   };
@@ -69,6 +72,7 @@ export function AppTabNavigator() {
       <Tab.Screen name="Transactions" component={TransactionsNavigator} />
       <Tab.Screen name="Transfer" component={TransfersNavigator} />
       <Tab.Screen name="Accounts" component={AccountsNavigator} />
+      <Tab.Screen name="Debts" component={DebtsNavigator} />
       <Tab.Screen name="Cards" component={CreditCardsNavigator} />
       <Tab.Screen name="Reports" component={ReportsNavigator} />
     </Tab.Navigator>

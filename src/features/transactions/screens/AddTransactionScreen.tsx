@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
@@ -41,7 +42,9 @@ export function AddTransactionScreen({ route, navigation }: Props) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [categoryPickerVisible, setCategoryPickerVisible] = useState(false);
   const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [categorySearch, setCategorySearch] = useState('');
   const [categoryName, setCategoryName] = useState('');
   const [categorySaving, setCategorySaving] = useState(false);
   const [loadingTransaction, setLoadingTransaction] = useState(Boolean(transactionId || duplicateTransactionId));
@@ -156,6 +159,7 @@ export function AddTransactionScreen({ route, navigation }: Props) {
       setRecentCategoryIds((current) => [category.id, ...current.filter((id) => id !== category.id)].slice(0, 5));
       setValue('categoryId', category.id, { shouldValidate: true });
       setCategoryName('');
+      setCategorySearch('');
       setCategoryModalVisible(false);
     } catch {
       Alert.alert('Could not add category', 'Please try a different category name.');
@@ -169,38 +173,48 @@ export function AddTransactionScreen({ route, navigation }: Props) {
     .filter((category) => !recentCategoryIds.includes(category.id) && frequentCategoryIds.includes(category.id))
     .sort((a, b) => frequentCategoryIds.indexOf(a.id) - frequentCategoryIds.indexOf(b.id));
   const otherCategories = categories.filter((category) => !recentCategoryIds.includes(category.id) && !frequentCategoryIds.includes(category.id));
+  const selectedCategory = categories.find((category) => category.id === watch('categoryId'));
+  const trimmedCategorySearch = categorySearch.trim().toLowerCase();
+  const searchedCategories = categories.filter((category) => category.name.toLowerCase().includes(trimmedCategorySearch));
+  const showSearchResults = trimmedCategorySearch.length > 0;
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
       <Header title={type === 'INCOME' ? (transactionId ? 'Edit income' : duplicateTransactionId ? 'Duplicate income' : 'Add income') : (transactionId ? 'Edit expense' : duplicateTransactionId ? 'Duplicate expense' : 'Add expense')} subtitle="Transfers stay separate from reports" />
       <ChoiceRow title="Account" items={accounts.map((account) => ({ id: account.id, label: account.name }))} selectedId={watch('accountId')} onSelect={(id) => setValue('accountId', id)} />
       {errors.accountId ? <AppText variant="small" style={styles.error}>{errors.accountId.message}</AppText> : null}
-      {recentCategories.length > 0 ? (
-        <ChoiceRow
-          title="Recent categories"
-          actionLabel="Add category"
-          onAction={() => setCategoryModalVisible(true)}
-          items={recentCategories.map((category) => ({ id: category.id, label: category.name }))}
-          selectedId={watch('categoryId')}
-          onSelect={(id) => setValue('categoryId', id, { shouldValidate: true })}
-        />
-      ) : null}
-      {frequentCategories.length > 0 ? (
-        <ChoiceRow
-          title="Frequent categories"
-          items={frequentCategories.map((category) => ({ id: category.id, label: category.name }))}
-          selectedId={watch('categoryId')}
-          onSelect={(id) => setValue('categoryId', id, { shouldValidate: true })}
-        />
-      ) : null}
-      <ChoiceRow
-        title={recentCategories.length > 0 ? 'All categories' : 'Category'}
-        actionLabel={recentCategories.length > 0 ? undefined : 'Add category'}
-        onAction={recentCategories.length > 0 ? undefined : () => setCategoryModalVisible(true)}
-        items={otherCategories.map((category) => ({ id: category.id, label: category.name }))}
-        selectedId={watch('categoryId')}
-        onSelect={(id) => setValue('categoryId', id, { shouldValidate: true })}
-      />
+      <View style={styles.choiceBlock}>
+        <View style={styles.choiceHeader}>
+          <AppText variant="small" muted>Category</AppText>
+          <Pressable
+            onPress={() => {
+              setCategoryPickerVisible(true);
+              setCategorySearch('');
+            }}
+            hitSlop={8}
+          >
+            <AppText variant="small" style={styles.actionText}>{selectedCategory ? 'Change' : 'Choose'}</AppText>
+          </Pressable>
+        </View>
+        <Pressable
+          onPress={() => {
+            setCategoryPickerVisible(true);
+            setCategorySearch('');
+          }}
+          style={[styles.selectorField, { backgroundColor: theme.colors.surface, borderColor: errors.categoryId ? theme.colors.danger : theme.colors.border }]}
+        >
+          <View style={styles.selectorContent}>
+            <View style={[styles.selectorIcon, { backgroundColor: theme.colors.surfaceMuted }]}>
+              <Ionicons name={type === 'INCOME' ? 'add-circle-outline' : 'pricetag-outline'} size={18} color={type === 'INCOME' ? theme.colors.income : theme.colors.expense} />
+            </View>
+            <View style={styles.selectorCopy}>
+              <AppText>{selectedCategory?.name ?? `Select ${type === 'INCOME' ? 'income' : 'expense'} category`}</AppText>
+              <AppText variant="small" muted>{selectedCategory ? 'Search to change category' : 'Recent and frequent categories appear first'}</AppText>
+            </View>
+            <Ionicons name="chevron-down" size={18} color={theme.colors.textMuted} />
+          </View>
+        </Pressable>
+      </View>
       {errors.categoryId ? <AppText variant="small" style={styles.error}>{errors.categoryId.message}</AppText> : null}
       <Card>
         <View style={styles.entryHeader}>
@@ -249,6 +263,101 @@ export function AddTransactionScreen({ route, navigation }: Props) {
               <PrimaryButton variant="ghost" onPress={() => setCategoryModalVisible(false)} style={styles.modalButton}>Cancel</PrimaryButton>
               <PrimaryButton loading={categorySaving} onPress={createCategory} style={styles.modalButton}>Add</PrimaryButton>
             </View>
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={categoryPickerVisible} transparent animationType="fade" onRequestClose={() => setCategoryPickerVisible(false)}>
+        <View style={[styles.modalBackdrop, { backgroundColor: theme.scheme === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(7,17,19,0.28)' }]}>
+          <View style={[styles.modalPanel, styles.pickerPanel, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <View style={styles.modalHeader}>
+              <AppText variant="h2">Select category</AppText>
+              <View style={styles.headerActions}>
+                <Pressable
+                  onPress={() => {
+                    setCategoryPickerVisible(false);
+                    setCategoryModalVisible(true);
+                  }}
+                  style={styles.inlineAction}
+                >
+                  <AppText variant="small" style={styles.actionText}>Add</AppText>
+                </Pressable>
+                <Pressable onPress={() => setCategoryPickerVisible(false)} style={styles.closeButton}>
+                  <AppText variant="small">Close</AppText>
+                </Pressable>
+              </View>
+            </View>
+            <FormInput
+              label="Search categories"
+              value={categorySearch}
+              onChangeText={setCategorySearch}
+              placeholder={`Search ${type === 'INCOME' ? 'income' : 'expense'} categories`}
+              autoFocus
+            />
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.pickerScroll}>
+              {showSearchResults ? (
+                searchedCategories.length > 0 ? (
+                  <CategorySection
+                    title="Matching results"
+                    items={searchedCategories}
+                    selectedId={watch('categoryId')}
+                    onSelect={(id) => {
+                      setValue('categoryId', id, { shouldValidate: true });
+                      setCategoryPickerVisible(false);
+                    }}
+                    type={type}
+                  />
+                ) : (
+                  <View style={styles.emptySearch}>
+                    <AppText>No category found</AppText>
+                    <AppText variant="small" muted>Search another name or add a new category.</AppText>
+                    <PrimaryButton compact variant="ghost" onPress={() => {
+                      setCategoryPickerVisible(false);
+                      setCategoryName(categorySearch);
+                      setCategoryModalVisible(true);
+                    }}>
+                      Add "{categorySearch.trim()}"
+                    </PrimaryButton>
+                  </View>
+                )
+              ) : (
+                <>
+                  {recentCategories.length > 0 ? (
+                    <CategorySection
+                      title="Recent"
+                      items={recentCategories}
+                      selectedId={watch('categoryId')}
+                      onSelect={(id) => {
+                        setValue('categoryId', id, { shouldValidate: true });
+                        setCategoryPickerVisible(false);
+                      }}
+                      type={type}
+                    />
+                  ) : null}
+                  {frequentCategories.length > 0 ? (
+                    <CategorySection
+                      title="Frequent"
+                      items={frequentCategories}
+                      selectedId={watch('categoryId')}
+                      onSelect={(id) => {
+                        setValue('categoryId', id, { shouldValidate: true });
+                        setCategoryPickerVisible(false);
+                      }}
+                      type={type}
+                    />
+                  ) : null}
+                  <CategorySection
+                    title="All categories"
+                    items={otherCategories.length > 0 ? otherCategories : categories}
+                    selectedId={watch('categoryId')}
+                    onSelect={(id) => {
+                      setValue('categoryId', id, { shouldValidate: true });
+                      setCategoryPickerVisible(false);
+                    }}
+                    type={type}
+                  />
+                </>
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -320,6 +429,39 @@ function ChoiceRow({
   );
 }
 
+function CategorySection({
+  title,
+  items,
+  selectedId,
+  onSelect,
+  type,
+}: {
+  title: string;
+  items: Category[];
+  selectedId: number;
+  onSelect: (id: number) => void;
+  type: TransactionType;
+}) {
+  return (
+    <View style={styles.sectionBlock}>
+      <AppText variant="small" muted>{title}</AppText>
+      <View style={styles.categoryList}>
+        {items.map((item) => {
+          const selected = selectedId === item.id;
+          return (
+            <Pressable key={item.id} onPress={() => onSelect(item.id)} style={[styles.categoryRow, selected && styles.categoryRowSelected]}>
+              <View style={[styles.rowCategoryIcon, selected && styles.rowCategoryIconSelected]}>
+                <Ionicons name={type === 'INCOME' ? 'add-outline' : 'pricetag-outline'} size={16} color={selected ? colors.background : type === 'INCOME' ? colors.income : colors.expense} />
+              </View>
+              <AppText style={selected ? styles.selectedCategoryText : undefined}>{item.name}</AppText>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   choiceBlock: {
     gap: spacing.sm,
@@ -356,6 +498,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
+  selectorField: {
+    minHeight: 58,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    justifyContent: 'center',
+  },
+  selectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  selectorIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectorCopy: {
+    flex: 1,
+    gap: 2,
+  },
   modalBackdrop: {
     flex: 1,
     justifyContent: 'center',
@@ -370,6 +535,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     padding: spacing.lg,
   },
+  pickerPanel: {
+    maxHeight: '82%',
+  },
   modalHeader: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -378,6 +546,53 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     padding: spacing.sm,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  inlineAction: {
+    padding: spacing.sm,
+  },
+  pickerScroll: {
+    gap: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  sectionBlock: {
+    gap: spacing.sm,
+  },
+  categoryList: {
+    gap: spacing.xs,
+  },
+  categoryRow: {
+    minHeight: 46,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  categoryRowSelected: {
+    backgroundColor: colors.primary,
+  },
+  rowCategoryIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(20,158,110,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowCategoryIconSelected: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  selectedCategoryText: {
+    color: colors.background,
+  },
+  emptySearch: {
+    gap: spacing.sm,
+    alignItems: 'flex-start',
   },
   modalActions: {
     flexDirection: 'row',

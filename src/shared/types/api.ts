@@ -5,6 +5,7 @@ export type TransactionType = 'INCOME' | 'EXPENSE';
 export type LedgerDirection = 'CREDIT' | 'DEBIT';
 export type LedgerReferenceType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TRANSFER_FEE' | 'OPENING_BALANCE' | 'MANUAL_ADJUSTMENT';
 export type CreditCardActivityType = 'SPEND' | 'PAYMENT' | 'ADJUSTMENT';
+export type DebtStatus = 'ACTIVE' | 'PARTIALLY_PAID' | 'FULLY_PAID' | 'OVERDUE';
 
 export interface User {
   id: number;
@@ -70,6 +71,36 @@ export interface CreditCardActivity {
   balanceAfter: number;
   note?: string | null;
   createdAt: string;
+}
+
+export interface Debt {
+  id: number;
+  userId: number;
+  personName: string;
+  phoneNumber?: string | null;
+  description?: string | null;
+  totalAmount: number;
+  totalPaid: number;
+  remainingAmount: number;
+  borrowDate: string;
+  dueDate?: string | null;
+  interestNote?: string | null;
+  tag?: string | null;
+  status: DebtStatus;
+  lastPaymentDate?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DebtPayment {
+  id: number;
+  debtId: number;
+  amount: number;
+  paymentDate: string;
+  note?: string | null;
+  remainingAfter: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Category {

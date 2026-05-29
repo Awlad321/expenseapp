@@ -10,6 +10,9 @@ import type {
   CreditCard,
   CreditCardActivity,
   DashboardSummary,
+  Debt,
+  DebtPayment,
+  DebtStatus,
   LedgerDirection,
   LedgerReferenceType,
   Transaction,
@@ -32,6 +35,8 @@ interface LocalDatabase {
   ledger: AccountLedger[];
   creditCards: CreditCard[];
   creditCardActivities: CreditCardActivity[];
+  debts: Debt[];
+  debtPayments: DebtPayment[];
 }
 
 export interface AccountPayload {
@@ -92,6 +97,24 @@ export interface CreditCardPaymentPayload {
   sourceAccountId: number;
   amount: number;
   activityDate: string;
+  note?: string;
+}
+
+export interface DebtPayload {
+  personName: string;
+  phoneNumber?: string;
+  description?: string;
+  totalAmount: number;
+  borrowDate: string;
+  dueDate?: string;
+  interestNote?: string;
+  tag?: string;
+}
+
+export interface DebtPaymentPayload {
+  debtId: number;
+  amount: number;
+  paymentDate: string;
   note?: string;
 }
 
@@ -588,6 +611,123 @@ export const localDatabase = {
       .sort((a, b) => b.activityDate.localeCompare(a.activityDate) || b.createdAt.localeCompare(a.createdAt));
   },
 
+  async listDebts() {
+    const db = await readDb();
+    return [...db.debts].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.personName.localeCompare(b.personName));
+  },
+
+  async getDebt(id: number) {
+    const db = await readDb();
+    const debt = db.debts.find((item) => item.id === id);
+    if (!debt) throw new Error('Debt not found');
+    return debt;
+  },
+
+  async createDebt(payload: DebtPayload) {
+    return mutateDb((db) => {
+      const debt: Debt = {
+        id: nextId(db),
+        userId: 1,
+        personName: requiredName(payload.personName, 'Person name'),
+        phoneNumber: optionalText(payload.phoneNumber),
+        description: optionalText(payload.description),
+        totalAmount: positive(payload.totalAmount),
+        totalPaid: 0,
+        remainingAmount: 0,
+        borrowDate: validDate(payload.borrowDate),
+        dueDate: optionalDate(payload.dueDate),
+        interestNote: optionalText(payload.interestNote),
+        tag: optionalText(payload.tag),
+        status: 'ACTIVE',
+        lastPaymentDate: null,
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      db.debts.push(debt);
+      recalculateDebt(db, debt.id, true);
+      return debt;
+    });
+  },
+
+  async updateDebt(id: number, payload: DebtPayload) {
+    return mutateDb((db) => {
+      const debt = getDebtById(db, id);
+      debt.personName = requiredName(payload.personName, 'Person name');
+      debt.phoneNumber = optionalText(payload.phoneNumber);
+      debt.description = optionalText(payload.description);
+      debt.totalAmount = positive(payload.totalAmount);
+      debt.borrowDate = validDate(payload.borrowDate);
+      debt.dueDate = optionalDate(payload.dueDate);
+      debt.interestNote = optionalText(payload.interestNote);
+      debt.tag = optionalText(payload.tag);
+      debt.updatedAt = now();
+      recalculateDebt(db, debt.id, true);
+      return debt;
+    });
+  },
+
+  async removeDebt(id: number) {
+    return mutateDb((db) => {
+      getDebtById(db, id);
+      db.debtPayments = db.debtPayments.filter((payment) => payment.debtId !== id);
+      db.debts = db.debts.filter((debt) => debt.id !== id);
+      return null;
+    });
+  },
+
+  async listDebtPayments(debtId?: number) {
+    const db = await readDb();
+    return db.debtPayments
+      .filter((payment) => !debtId || payment.debtId === debtId)
+      .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate) || b.createdAt.localeCompare(a.createdAt));
+  },
+
+  async createDebtPayment(payload: DebtPaymentPayload) {
+    return mutateDb((db) => {
+      const debt = getDebtById(db, payload.debtId);
+      const payment: DebtPayment = {
+        id: nextId(db),
+        debtId: debt.id,
+        amount: positive(payload.amount),
+        paymentDate: validDate(payload.paymentDate),
+        note: optionalText(payload.note),
+        remainingAfter: debt.remainingAmount,
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      db.debtPayments.push(payment);
+      recalculateDebt(db, debt.id, true);
+      return payment;
+    });
+  },
+
+  async updateDebtPayment(id: number, payload: DebtPaymentPayload) {
+    return mutateDb((db) => {
+      const payment = getDebtPaymentById(db, id);
+      const previousDebtId = payment.debtId;
+      getDebtById(db, payload.debtId);
+      payment.debtId = payload.debtId;
+      payment.amount = positive(payload.amount);
+      payment.paymentDate = validDate(payload.paymentDate);
+      payment.note = optionalText(payload.note);
+      payment.updatedAt = now();
+      recalculateDebt(db, previousDebtId, true);
+      if (payload.debtId !== previousDebtId) {
+        recalculateDebt(db, payload.debtId, true);
+      }
+      return payment;
+    });
+  },
+
+  async removeDebtPayment(id: number) {
+    return mutateDb((db) => {
+      const payment = getDebtPaymentById(db, id);
+      db.debtPayments = db.debtPayments.filter((item) => item.id !== id);
+      recalculateDebt(db, payment.debtId, true);
+      return null;
+    });
+  },
+
   async createTransfer(payload: TransferPayload) {
     return mutateDb((db) => {
       const transfer: Transfer = {
@@ -856,6 +996,8 @@ function createEmptyDb(): LocalDatabase {
     ledger: [],
     creditCards: [],
     creditCardActivities: [],
+    debts: [],
+    debtPayments: [],
   };
 }
 
@@ -870,8 +1012,11 @@ function normalizeDb(db: LocalDatabase): LocalDatabase {
     ledger: db.ledger ?? [],
     creditCards: db.creditCards ?? [],
     creditCardActivities: db.creditCardActivities ?? [],
+    debts: db.debts ?? [],
+    debtPayments: db.debtPayments ?? [],
   };
   normalized.nextId = Math.max(normalized.nextId ?? 1, maxExistingId(normalized) + 1);
+  normalized.debts.forEach((debt) => recalculateDebt(normalized, debt.id));
   return normalized;
 }
 
@@ -935,6 +1080,8 @@ function maxExistingId(db: LocalDatabase) {
     ...db.ledger.map((item) => item.id),
     ...db.creditCards.map((item) => item.id),
     ...db.creditCardActivities.map((item) => item.id),
+    ...db.debts.map((item) => item.id),
+    ...db.debtPayments.map((item) => item.id),
   ];
   return Math.max(0, ...ids);
 }
@@ -973,6 +1120,49 @@ function getCreditCard(db: LocalDatabase, id: number) {
   const card = db.creditCards.find((item) => item.id === id);
   if (!card) throw new Error('Credit card not found');
   return card;
+}
+
+function getDebtById(db: LocalDatabase, id: number) {
+  const debt = db.debts.find((item) => item.id === id);
+  if (!debt) throw new Error('Debt not found');
+  return debt;
+}
+
+function getDebtPaymentById(db: LocalDatabase, id: number) {
+  const payment = db.debtPayments.find((item) => item.id === id);
+  if (!payment) throw new Error('Debt payment not found');
+  return payment;
+}
+
+function recalculateDebt(db: LocalDatabase, debtId: number, touchUpdatedAt = false) {
+  const debt = getDebtById(db, debtId);
+  const payments = db.debtPayments
+    .filter((payment) => payment.debtId === debtId)
+    .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) || a.createdAt.localeCompare(b.createdAt));
+
+  let runningPaid = 0;
+  payments.forEach((payment) => {
+    runningPaid = money(runningPaid + payment.amount);
+    if (runningPaid - debt.totalAmount > 0.001) {
+      throw new Error('Payments cannot exceed total borrowed amount');
+    }
+    payment.remainingAfter = money(Math.max(debt.totalAmount - runningPaid, 0));
+  });
+
+  debt.totalPaid = money(runningPaid);
+  debt.remainingAmount = money(Math.max(debt.totalAmount - runningPaid, 0));
+  debt.lastPaymentDate = payments.at(-1)?.paymentDate ?? null;
+  debt.status = resolveDebtStatus(debt);
+  if (touchUpdatedAt) {
+    debt.updatedAt = now();
+  }
+}
+
+function resolveDebtStatus(debt: Debt): DebtStatus {
+  if (debt.remainingAmount <= 0) return 'FULLY_PAID';
+  if (debt.dueDate && debt.dueDate < todayValue()) return 'OVERDUE';
+  if (debt.totalPaid > 0) return 'PARTIALLY_PAID';
+  return 'ACTIVE';
 }
 
 function addCreditCardActivity(
@@ -1091,6 +1281,16 @@ function nonNegative(value: number) {
   const amount = money(value);
   if (amount < 0) throw new Error('Amount cannot be negative');
   return amount;
+}
+
+function optionalText(value?: string | null) {
+  const text = value?.trim();
+  return text ? text : null;
+}
+
+function optionalDate(value?: string | null) {
+  if (!value) return null;
+  return validDate(value);
 }
 
 function money(value: number) {

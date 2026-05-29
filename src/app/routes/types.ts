@@ -35,11 +35,18 @@ export type CreditCardsStackParamList = {
   CreditCardsHome: undefined;
 };
 
+export type DebtsStackParamList = {
+  DebtsHome: undefined;
+  AddEditDebt: { debtId?: number } | undefined;
+  DebtDetails: { debtId: number };
+};
+
 export type AppTabParamList = {
   Dashboard: NavigatorScreenParams<DashboardStackParamList>;
   Transactions: NavigatorScreenParams<TransactionsStackParamList>;
   Transfer: NavigatorScreenParams<TransfersStackParamList>;
   Accounts: NavigatorScreenParams<AccountsStackParamList>;
+  Debts: NavigatorScreenParams<DebtsStackParamList>;
   Cards: NavigatorScreenParams<CreditCardsStackParamList>;
   Reports: NavigatorScreenParams<ReportsStackParamList>;
 };
