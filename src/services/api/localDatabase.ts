@@ -631,6 +631,7 @@ export const localDatabase = {
     const totalIncome = sumByType(monthlyTransactions, 'INCOME');
     const totalExpense = sumByType(monthlyTransactions, 'EXPENSE');
     const totalBalance = money(db.accounts.filter((account) => account.active).reduce((sum, account) => sum + account.currentBalance, 0));
+    const totalCreditCardLimit = money(db.creditCards.reduce((sum, card) => sum + card.creditLimit, 0));
     const totalCreditCardDebt = money(db.creditCards.reduce((sum, card) => sum + card.outstandingBalance, 0));
 
     return {
@@ -643,6 +644,8 @@ export const localDatabase = {
       todayExpense: money(todayExpenses.reduce((sum, transaction) => sum + transaction.amount, 0)),
       todayExpenses,
       totalCreditCardDebt,
+      totalCreditCardLimit,
+      totalCreditCardRemaining: money(totalCreditCardLimit - totalCreditCardDebt),
       netPosition: money(totalBalance - totalCreditCardDebt),
       previousMonthIncome: sumByType(previousTransactions, 'INCOME'),
       previousMonthExpense: sumByType(previousTransactions, 'EXPENSE'),

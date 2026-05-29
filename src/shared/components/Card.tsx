@@ -11,7 +11,17 @@ export function Card({ children, style }: { children: ReactNode; style?: ViewSty
     <View
       style={[
         styles.card,
-        { backgroundColor: theme.colors.card, borderColor: theme.colors.border, padding: layout.compact ? spacing.md : spacing.lg, gap: layout.compact ? spacing.sm : spacing.md },
+        {
+          backgroundColor: theme.colors.card,
+          borderColor: theme.colors.border,
+          padding: layout.compact ? spacing.md : spacing.lg,
+          gap: layout.compact ? spacing.sm : spacing.md,
+          shadowColor: theme.scheme === 'dark' ? '#000000' : '#0F172A',
+          shadowOpacity: theme.scheme === 'dark' ? 0.12 : 0.035,
+          shadowRadius: 8,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: theme.scheme === 'dark' ? 0 : 0,
+        },
         style,
       ]}
     >
@@ -22,11 +32,7 @@ export function Card({ children, style }: { children: ReactNode; style?: ViewSty
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.md,
   },
 });

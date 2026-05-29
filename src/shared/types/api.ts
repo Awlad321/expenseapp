@@ -125,6 +125,8 @@ export interface DashboardSummary {
   todayExpense?: number;
   todayExpenses?: Transaction[];
   totalCreditCardDebt?: number;
+  totalCreditCardLimit?: number;
+  totalCreditCardRemaining?: number;
   netPosition?: number;
   previousMonthIncome: number;
   previousMonthExpense: number;

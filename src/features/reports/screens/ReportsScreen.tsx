@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, StyleSheet, View } from 'react-native';
 import { documentDirectory, StorageAccessFramework, writeAsStringAsync } from 'expo-file-system/legacy';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { BarChart, LineChart } from 'react-native-chart-kit';
 import { AppText } from '../../../shared/components/AppText';
 import { Card } from '../../../shared/components/Card';
@@ -10,7 +11,7 @@ import { Header } from '../../../shared/components/Header';
 import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
 import { SegmentedControl } from '../../../shared/components/SegmentedControl';
-import { colors, spacing } from '../../../shared/theme/theme';
+import { spacing } from '../../../shared/theme/theme';
 import { currentMonth, formatMoney, today } from '../../../shared/utils/format';
 import type { DashboardSummary, Transaction } from '../../../shared/types/api';
 import { backupService } from '../../../services/api/backupService';
@@ -96,9 +97,15 @@ export function ReportsScreen() {
     backgroundGradientTo: theme.colors.card,
     color: (opacity = 1) => withOpacity(theme.colors.primary, opacity),
     labelColor: (opacity = 1) => withOpacity(theme.colors.textMuted, opacity),
-    propsForBackgroundLines: { stroke: theme.colors.border },
+    propsForBackgroundLines: { stroke: withOpacity(theme.colors.border, 0.38), strokeWidth: 1 },
+    propsForLabels: { fontSize: layout.compact ? 10 : 11 },
+    propsForDots: {
+      r: layout.compact ? '2.5' : '3',
+      strokeWidth: '1.5',
+      stroke: theme.colors.card,
+    },
     decimalPlaces: 0,
-    barPercentage: 0.68,
+    barPercentage: 0.56,
   };
 
   async function configureBackup() {
@@ -141,9 +148,12 @@ export function ReportsScreen() {
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
       <Header title="Insights" subtitle={`${periodLabel(period)} money decisions`} />
-      <Card>
-        <AppText variant="h2">Insight period</AppText>
-        <SegmentedControl compact options={periodOptions} value={period} onChange={(nextPeriod) => setPeriod(nextPeriod as ReportPeriod)} />
+      <Card style={styles.filterCard}>
+        <View style={styles.periodHeader}>
+          <AppText variant="small" muted>Insight period</AppText>
+          <AppText variant="small" muted>{periodLabel(period)}</AppText>
+        </View>
+        <SegmentedControl compact options={periodOptions} value={period} onChange={(nextPeriod) => setPeriod(nextPeriod as ReportPeriod)} style={styles.periodTabs} />
         {period === 'day' ? (
           <DatePickerField label="Day" value={selectedDate} onChange={setSelectedDate} />
         ) : period === 'month' ? (
@@ -155,17 +165,32 @@ export function ReportsScreen() {
       {loading ? <ActivityIndicator color={theme.colors.primary} /> : null}
       {!loading ? (
         <>
+          {summary ? (
+            <Card>
+              <AppText variant="h2">Money snapshot</AppText>
+              <View style={styles.metricsGrid}>
+                <MetricCard label="Usable cash" value={formatMoney(summary.remainingBalance ?? summary.totalBalance)} tone="positive" palette={theme.colors} />
+                <MetricCard label="Today spent" value={formatMoney(summary.todayExpense ?? 0)} tone="negative" palette={theme.colors} />
+                <MetricCard label="Income" value={formatMoney(report.totalIncome)} tone="positive" palette={theme.colors} />
+                <MetricCard label="Expense" value={formatMoney(report.totalExpense)} tone="negative" palette={theme.colors} />
+              </View>
+            </Card>
+          ) : null}
           <Card>
             <AppText variant="h2">What needs attention</AppText>
-            {insights.map((insight) => (
-              <View key={insight.label} style={[styles.insightRow, { backgroundColor: theme.colors.surface }]}>
-                <View style={[styles.insightDot, { backgroundColor: insight.color }]} />
-                <View style={styles.insightCopy}>
-                  <AppText>{insight.label}</AppText>
-                  <AppText variant="small" muted>{insight.value}</AppText>
+            <View style={styles.insightsGrid}>
+              {insights.map((insight) => (
+                <View key={insight.label} style={[styles.insightRow, { backgroundColor: theme.colors.surface }]}>
+                  <View style={[styles.insightBadge, { backgroundColor: `${insight.color}14` }]}>
+                    <Ionicons name={iconForInsight(insight.color, theme.colors)} size={16} color={insight.color} />
+                  </View>
+                  <View style={styles.insightCopy}>
+                    <AppText>{insight.label}</AppText>
+                    <AppText variant="small" muted>{insight.value}</AppText>
+                  </View>
                 </View>
-              </View>
-            ))}
+              ))}
+            </View>
           </Card>
           {summary ? <Card>
             <AppText variant="h2">Position snapshot</AppText>
@@ -175,6 +200,17 @@ export function ReportsScreen() {
               <SnapshotTile label="Net movement" value={formatMoney(report.savings)} color={report.savings >= 0 ? theme.colors.income : theme.colors.expense} />
             </View>
           </Card> : null}
+          {summary ? (
+            <Card>
+              <AppText variant="h2">Monthly comparison</AppText>
+              <View style={styles.metricsGrid}>
+                <MetricCard label="Prev income" value={formatMoney(summary.previousMonthIncome)} tone="neutral" palette={theme.colors} />
+                <MetricCard label="Prev expense" value={formatMoney(summary.previousMonthExpense)} tone="neutral" palette={theme.colors} />
+                <MetricCard label="Change in income" value={formatDelta(report.totalIncome - summary.previousMonthIncome)} tone={report.totalIncome - summary.previousMonthIncome >= 0 ? 'positive' : 'negative'} palette={theme.colors} />
+                <MetricCard label="Change in expense" value={formatDelta(report.totalExpense - summary.previousMonthExpense)} tone={report.totalExpense - summary.previousMonthExpense <= 0 ? 'positive' : 'negative'} palette={theme.colors} />
+              </View>
+            </Card>
+          ) : null}
           <Card>
             <AppText variant="h2">{period === 'day' ? 'Day total' : 'Expense trend'}</AppText>
             <LineChart
@@ -183,8 +219,8 @@ export function ReportsScreen() {
                 datasets: [{ data: report.expenseTrend }],
               }}
               width={layout.chartWidth}
-              height={220}
-              yAxisLabel="৳"
+              height={190}
+              yAxisLabel=""
               yAxisSuffix=""
               chartConfig={{
                 ...chartConfig,
@@ -192,45 +228,68 @@ export function ReportsScreen() {
               }}
               bezier
               fromZero
+              withVerticalLines={false}
+              withHorizontalLabels
+              formatYLabel={(value) => formatCompactMoney(Number(value))}
               style={styles.chart}
             />
           </Card>
           <Card>
-            <AppText variant="h2">Top spending categories</AppText>
+            <AppText variant="h2">Cashflow overview</AppText>
             <BarChart
               data={{
                 labels: ['Income', 'Expense'],
                 datasets: [{ data: [report.totalIncome, report.totalExpense], colors: [() => theme.colors.income, () => theme.colors.expense] }],
               }}
               width={layout.chartWidth}
-              height={180}
-              yAxisLabel="৳"
+              height={176}
+              yAxisLabel=""
               yAxisSuffix=""
               chartConfig={chartConfig}
               fromZero
-              showValuesOnTopOfBars
+              withInnerLines={false}
+              withHorizontalLabels
               withCustomBarColorFromData
               flatColor
               style={styles.chart}
             />
+            <View style={styles.cashflowLegend}>
+              <LegendPill label={`Income ${formatMoney(report.totalIncome)}`} color={theme.colors.income} />
+              <LegendPill label={`Expense ${formatMoney(report.totalExpense)}`} color={theme.colors.expense} />
+            </View>
+          </Card>
+          <Card>
+            <AppText variant="h2">Top spending categories</AppText>
             {report.expenseByCategory.length === 0 ? <AppText muted>No category spending yet.</AppText> : report.expenseByCategory.slice(0, 6).map((item) => (
-              <Bar key={item.category} label={item.category} value={item.amount} max={Math.max(...report.expenseByCategory.map((category) => category.amount), 1)} color={theme.colors.expense} />
+              <Bar key={item.category} label={item.category} value={item.amount} max={Math.max(...report.expenseByCategory.map((category) => category.amount), 1)} color={theme.colors.expense} palette={theme.colors} />
             ))}
           </Card>
           <Card>
             <AppText variant="h2">Expense mix</AppText>
-            <View style={styles.snapshotGrid}>
-              <SnapshotTile label="Fixed" value={formatMoney(report.expenseByTag.FIXED)} color={theme.colors.warning} />
-              <SnapshotTile label="Essential" value={formatMoney(report.expenseByTag.ESSENTIAL)} color={theme.colors.accent} />
-              <SnapshotTile label="Optional" value={formatMoney(report.expenseByTag.DISCRETIONARY)} color={theme.colors.expense} />
-            </View>
-            <AppText variant="small" muted>General expense categories remain outside the tagged buckets.</AppText>
+            <ExpenseMix
+              totalExpense={report.totalExpense}
+              palette={theme.colors}
+              values={[
+                { label: 'Fixed', amount: report.expenseByTag.FIXED, color: theme.colors.warning },
+                { label: 'Essential', amount: report.expenseByTag.ESSENTIAL, color: theme.colors.accent },
+                { label: 'Optional', amount: report.expenseByTag.DISCRETIONARY, color: theme.colors.expense },
+              ]}
+            />
+            <AppText variant="small" muted>General categories stay outside these buckets until tagged.</AppText>
           </Card>
           {summary ? <Card>
             <AppText variant="h2">Accounts at a glance</AppText>
             {summary.accountBalances.map((item) => (
-              <View key={item.accountId} style={styles.row}>
-                <AppText>{item.accountName}</AppText>
+              <View key={item.accountId} style={styles.accountRow}>
+                <View style={styles.accountLeft}>
+                  <View style={[styles.accountIcon, { backgroundColor: `${accountColor(item.type, theme.colors)}16` }]}>
+                    <Ionicons name={accountIcon(item.type)} size={16} color={accountColor(item.type, theme.colors)} />
+                  </View>
+                  <View style={styles.accountCopy}>
+                    <AppText>{item.accountName}</AppText>
+                    <AppText variant="small" muted>{accountLabel(item.type)}</AppText>
+                  </View>
+                </View>
                 <AppText>{formatMoney(item.balance)}</AppText>
               </View>
             ))}
@@ -239,12 +298,12 @@ export function ReportsScreen() {
             <AppText variant="h2">Data & backup</AppText>
             <AppText muted>Export month data or write a device backup outside the app storage.</AppText>
             <View style={styles.backupActions}>
-              <PrimaryButton loading={exporting} onPress={exportCsv} style={styles.backupButton}>Export CSV</PrimaryButton>
-              <PrimaryButton loading={backupBusy} onPress={configureBackup} style={styles.backupButton}>Choose Folder</PrimaryButton>
+              <PrimaryButton compact variant="ghost" loading={exporting} onPress={exportCsv} style={styles.backupButton}>Export CSV</PrimaryButton>
+              <PrimaryButton compact variant="ghost" loading={backupBusy} onPress={configureBackup} style={styles.backupButton}>Choose Folder</PrimaryButton>
             </View>
             <View style={styles.backupActions}>
-              <PrimaryButton variant="secondary" loading={backupBusy} onPress={backupNow} style={styles.backupButton}>Backup Now</PrimaryButton>
-              <PrimaryButton variant="secondary" loading={backupBusy} onPress={restoreBackup} style={styles.backupButton}>Restore Latest</PrimaryButton>
+              <PrimaryButton compact variant="secondary" loading={backupBusy} onPress={backupNow} style={styles.backupButton}>Backup Now</PrimaryButton>
+              <PrimaryButton compact variant="secondary" loading={backupBusy} onPress={restoreBackup} style={styles.backupButton}>Restore Latest</PrimaryButton>
             </View>
           </Card>
         </>
@@ -366,7 +425,74 @@ function SnapshotTile({ label, value, color }: { label: string; value: string; c
   return (
     <View style={styles.snapshotTile}>
       <AppText variant="small" muted>{label}</AppText>
-      <AppText style={{ color }}>{value}</AppText>
+      <AppText variant="h2" style={{ color }}>{value}</AppText>
+    </View>
+  );
+}
+
+function MetricCard({ label, value, tone, palette }: { label: string; value: string; tone: 'positive' | 'negative' | 'neutral'; palette: AppColors }) {
+  const color = tone === 'positive' ? palette.income : tone === 'negative' ? palette.expense : undefined;
+  return (
+    <View style={[styles.metricCard, { backgroundColor: palette.surface }]}>
+      <AppText variant="small" muted>{label}</AppText>
+      <AppText variant="h2" style={{ color }}>{value}</AppText>
+    </View>
+  );
+}
+
+function LegendPill({ label, color }: { label: string; color: string }) {
+  return (
+    <View style={[styles.legendPill, { backgroundColor: `${color}12` }]}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <AppText variant="small" muted>{label}</AppText>
+    </View>
+  );
+}
+
+function ExpenseMix({
+  totalExpense,
+  palette,
+  values,
+}: {
+  totalExpense: number;
+  palette: AppColors;
+  values: Array<{ label: string; amount: number; color: string }>;
+}) {
+  const totalTracked = values.reduce((sum, item) => sum + item.amount, 0);
+  const denominator = totalTracked > 0 ? totalTracked : 1;
+
+  return (
+    <View style={styles.expenseMixBlock}>
+      <View style={[styles.mixTrack, { backgroundColor: withOpacity(palette.surfaceMuted, 0.8) }]}>
+        {values.map((item) => (
+          <View
+            key={item.label}
+            style={[
+              styles.mixSegment,
+              {
+                backgroundColor: item.color,
+                flex: item.amount > 0 ? item.amount / denominator : 0.15,
+              },
+            ]}
+          />
+        ))}
+      </View>
+      {values.map((item) => {
+        const percentage = totalTracked > 0 ? Math.round((item.amount / denominator) * 100) : 0;
+        return (
+          <View key={item.label} style={styles.mixRow}>
+            <View style={styles.mixLeft}>
+              <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+              <AppText>{item.label}</AppText>
+            </View>
+            <View style={styles.mixRight}>
+              <AppText variant="small" muted>{percentage}%</AppText>
+              <AppText>{formatMoney(item.amount)}</AppText>
+            </View>
+          </View>
+        );
+      })}
+      <AppText variant="small" muted>{`Tagged categories cover ${formatCompactMoney(totalTracked)} of ${formatCompactMoney(totalExpense)} total spending.`}</AppText>
     </View>
   );
 }
@@ -411,6 +537,18 @@ function periodLabel(period: ReportPeriod) {
   return 'Monthly';
 }
 
+function formatDelta(value: number) {
+  return `${value >= 0 ? '+' : '-'}${formatMoney(Math.abs(value)).replace('৳', '৳')}`;
+}
+
+function formatCompactMoney(value: number) {
+  const amount = Math.abs(Number(value || 0));
+  if (amount >= 10000000) return `৳${(value / 10000000).toFixed(1).replace(/\.0$/, '')}Cr`;
+  if (amount >= 100000) return `৳${(value / 100000).toFixed(1).replace(/\.0$/, '')}L`;
+  if (amount >= 1000) return `৳${Math.round(value / 1000)}k`;
+  return `৳${Math.round(value)}`;
+}
+
 function withOpacity(hex: string, opacity: number) {
   const normalized = hex.replace('#', '');
   if (normalized.length !== 6) return hex;
@@ -449,42 +587,97 @@ async function saveCsvInAppDocuments(csv: string, filename: string) {
   Alert.alert('CSV exported', `Saved as ${filename}`);
 }
 
-function Bar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+function Bar({ label, value, max, color, palette }: { label: string; value: number; max: number; color: string; palette: AppColors }) {
+  const percentage = Math.round((value / Math.max(max, 1)) * 100);
   return (
     <View style={styles.barBlock}>
       <View style={styles.row}>
-        <AppText>{label}</AppText>
-        <AppText>{formatMoney(value)}</AppText>
+        <View style={styles.categoryLabelRow}>
+          <View style={[styles.legendDot, { backgroundColor: color }]} />
+          <AppText>{label}</AppText>
+        </View>
+        <View style={styles.categoryAmountBlock}>
+          <AppText variant="small" muted>{percentage}%</AppText>
+          <AppText>{formatMoney(value)}</AppText>
+        </View>
       </View>
-      <View style={styles.track}>
-        <View style={[styles.fill, { width: `${Math.max((value / max) * 100, 3)}%`, backgroundColor: color }]} />
+      <View style={[styles.categoryTrack, { backgroundColor: withOpacity(palette.surfaceMuted, 0.75) }]}>
+        <View style={[styles.categoryFill, { width: `${Math.max((value / max) * 100, 3)}%`, backgroundColor: color }]} />
       </View>
     </View>
   );
 }
 
+function accountIcon(type: string): keyof typeof Ionicons.glyphMap {
+  if (type === 'BANK') return 'business-outline';
+  if (type === 'CASH') return 'cash-outline';
+  if (type === 'WALLET') return 'wallet-outline';
+  return 'layers-outline';
+}
+
+function accountLabel(type: string) {
+  if (type === 'BANK') return 'Bank';
+  if (type === 'CASH') return 'Cash';
+  if (type === 'WALLET') return 'Wallet';
+  return 'Other';
+}
+
+function accountColor(type: string, palette: AppColors) {
+  if (type === 'BANK') return palette.bank;
+  if (type === 'CASH') return palette.cash;
+  if (type === 'WALLET') return palette.wallet;
+  return palette.primary;
+}
+
+function iconForInsight(color: string, palette: AppColors): keyof typeof Ionicons.glyphMap {
+  if (color === palette.income) return 'checkmark-circle-outline';
+  if (color === palette.expense || color === palette.warning) return 'alert-circle-outline';
+  return 'analytics-outline';
+}
+
 const styles = StyleSheet.create({
+  filterCard: {
+    gap: spacing.sm,
+  },
+  periodHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  periodTabs: {
+    marginTop: -spacing.xs,
+  },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: spacing.md,
   },
-  barBlock: {
-    gap: spacing.sm,
+  categoryLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flex: 1,
   },
-  track: {
-    height: 10,
-    borderRadius: 10,
-    backgroundColor: colors.surfaceMuted,
+  categoryAmountBlock: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  barBlock: {
+    gap: spacing.xs,
+  },
+  categoryTrack: {
+    height: 8,
+    borderRadius: 8,
     overflow: 'hidden',
   },
-  fill: {
-    height: 10,
-    borderRadius: 10,
+  categoryFill: {
+    height: 8,
+    borderRadius: 8,
   },
   chart: {
-    borderRadius: 16,
-    marginLeft: -spacing.sm,
+    borderRadius: 14,
+    marginLeft: -spacing.md,
+    marginTop: spacing.xs,
   },
   selectorRow: {
     flexDirection: 'row',
@@ -492,8 +685,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   selectorButton: {
-    minHeight: 44,
-    minWidth: 82,
+    minHeight: 36,
+    minWidth: 66,
   },
   selectorValue: {
     flex: 1,
@@ -501,11 +694,44 @@ const styles = StyleSheet.create({
   },
   snapshotGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.sm,
   },
   snapshotTile: {
     flex: 1,
     gap: spacing.xs,
+    minWidth: 110,
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  metricCard: {
+    width: '48%',
+    minWidth: 132,
+    gap: spacing.xs,
+    padding: spacing.sm,
+    borderRadius: 12,
+  },
+  cashflowLegend: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  legendPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: 999,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   backupActions: {
     flexDirection: 'row',
@@ -514,22 +740,82 @@ const styles = StyleSheet.create({
   },
   backupButton: {
     flex: 1,
-    minWidth: 140,
+    minWidth: 132,
   },
   insightRow: {
-    borderRadius: 14,
+    borderRadius: 12,
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.sm,
+    width: '48%',
+    minWidth: 150,
   },
-  insightDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+  insightBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   insightCopy: {
     flex: 1,
+    gap: 2,
+  },
+  insightsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  expenseMixBlock: {
+    gap: spacing.sm,
+  },
+  mixTrack: {
+    height: 12,
+    borderRadius: 999,
+    overflow: 'hidden',
+    flexDirection: 'row',
+  },
+  mixSegment: {
+    height: 12,
+  },
+  mixRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  mixLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.xs,
+  },
+  mixRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  accountLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  accountIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountCopy: {
+    flex: 1,
+    gap: 2,
   },
 });

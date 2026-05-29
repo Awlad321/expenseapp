@@ -11,6 +11,7 @@ import { FormInput } from '../../../shared/components/FormInput';
 import { Header } from '../../../shared/components/Header';
 import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
+import { Card } from '../../../shared/components/Card';
 import { colors, radius, spacing } from '../../../shared/theme/theme';
 import { useTheme } from '../../../shared/theme/ThemeContext';
 import { today } from '../../../shared/utils/format';
@@ -46,6 +47,7 @@ export function AddTransactionScreen({ route, navigation }: Props) {
   const [loadingTransaction, setLoadingTransaction] = useState(Boolean(transactionId || duplicateTransactionId));
   const [recentAmounts, setRecentAmounts] = useState<string[]>([]);
   const [recentCategoryIds, setRecentCategoryIds] = useState<number[]>([]);
+  const [frequentCategoryIds, setFrequentCategoryIds] = useState<number[]>([]);
   const { control, handleSubmit, watch, setValue, reset, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { accountId: 0, categoryId: 0, amount: '', transactionDate: today(), note: '' },
@@ -53,15 +55,17 @@ export function AddTransactionScreen({ route, navigation }: Props) {
 
   async function loadOptions() {
     try {
-      const [accountData, categoryData, preference] = await Promise.all([
+      const [accountData, categoryData, preference, recentTransactions] = await Promise.all([
         accountService.list(),
         categoryService.list(type),
         getTransactionPreference(type),
+        transactionService.list({ type }),
       ]);
       const activeAccounts = accountData.filter((account) => account.active);
       setAccounts(activeAccounts);
       setRecentAmounts(preference.amounts);
       setRecentCategoryIds(preference.categoryIds);
+      setFrequentCategoryIds(buildFrequentCategoryIds(recentTransactions));
       setCategories(sortCategoriesByRecent(categoryData, preference.categoryIds));
 
       if (preference.accountId && activeAccounts.some((account) => account.id === preference.accountId)) {
@@ -160,31 +164,68 @@ export function AddTransactionScreen({ route, navigation }: Props) {
     }
   }
 
+  const recentCategories = categories.filter((category) => recentCategoryIds.includes(category.id)).sort((a, b) => recentCategoryIds.indexOf(a.id) - recentCategoryIds.indexOf(b.id));
+  const frequentCategories = categories
+    .filter((category) => !recentCategoryIds.includes(category.id) && frequentCategoryIds.includes(category.id))
+    .sort((a, b) => frequentCategoryIds.indexOf(a.id) - frequentCategoryIds.indexOf(b.id));
+  const otherCategories = categories.filter((category) => !recentCategoryIds.includes(category.id) && !frequentCategoryIds.includes(category.id));
+
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
       <Header title={type === 'INCOME' ? (transactionId ? 'Edit income' : duplicateTransactionId ? 'Duplicate income' : 'Add income') : (transactionId ? 'Edit expense' : duplicateTransactionId ? 'Duplicate expense' : 'Add expense')} subtitle="Transfers stay separate from reports" />
       <ChoiceRow title="Account" items={accounts.map((account) => ({ id: account.id, label: account.name }))} selectedId={watch('accountId')} onSelect={(id) => setValue('accountId', id)} />
       {errors.accountId ? <AppText variant="small" style={styles.error}>{errors.accountId.message}</AppText> : null}
+      {recentCategories.length > 0 ? (
+        <ChoiceRow
+          title="Recent categories"
+          actionLabel="Add category"
+          onAction={() => setCategoryModalVisible(true)}
+          items={recentCategories.map((category) => ({ id: category.id, label: category.name }))}
+          selectedId={watch('categoryId')}
+          onSelect={(id) => setValue('categoryId', id, { shouldValidate: true })}
+        />
+      ) : null}
+      {frequentCategories.length > 0 ? (
+        <ChoiceRow
+          title="Frequent categories"
+          items={frequentCategories.map((category) => ({ id: category.id, label: category.name }))}
+          selectedId={watch('categoryId')}
+          onSelect={(id) => setValue('categoryId', id, { shouldValidate: true })}
+        />
+      ) : null}
       <ChoiceRow
-        title="Category"
-        actionLabel="Add category"
-        onAction={() => setCategoryModalVisible(true)}
-        items={categories.map((category) => ({ id: category.id, label: category.name }))}
+        title={recentCategories.length > 0 ? 'All categories' : 'Category'}
+        actionLabel={recentCategories.length > 0 ? undefined : 'Add category'}
+        onAction={recentCategories.length > 0 ? undefined : () => setCategoryModalVisible(true)}
+        items={otherCategories.map((category) => ({ id: category.id, label: category.name }))}
         selectedId={watch('categoryId')}
         onSelect={(id) => setValue('categoryId', id, { shouldValidate: true })}
       />
       {errors.categoryId ? <AppText variant="small" style={styles.error}>{errors.categoryId.message}</AppText> : null}
-      <Controller control={control} name="amount" render={({ field }) => (
-        <FormInput label="Amount" keyboardType="numeric" value={field.value} onChangeText={field.onChange} error={errors.amount?.message} />
-      )} />
-      {recentAmounts.length > 0 ? (
-        <ChoiceRow
-          title="Recent amounts"
-          items={recentAmounts.map((amount) => ({ id: Number(amount), label: `৳${amount}` }))}
-          selectedId={Number(watch('amount'))}
-          onSelect={(id) => setValue('amount', `${id}`, { shouldValidate: true })}
-        />
-      ) : null}
+      <Card>
+        <View style={styles.entryHeader}>
+          <View>
+            <AppText variant="h2">Amount</AppText>
+            <AppText variant="small" muted>Fast entry with recent values</AppText>
+          </View>
+          {watch('accountId') ? (
+            <View style={[styles.selectedHint, { backgroundColor: theme.colors.surfaceMuted }]}>
+              <AppText variant="small" muted>{accounts.find((account) => account.id === watch('accountId'))?.name}</AppText>
+            </View>
+          ) : null}
+        </View>
+        <Controller control={control} name="amount" render={({ field }) => (
+          <FormInput label="Amount" keyboardType="numeric" placeholder="0" value={field.value} onChangeText={field.onChange} error={errors.amount?.message} />
+        )} />
+        {recentAmounts.length > 0 ? (
+          <ChoiceRow
+            title="Recent amounts"
+            items={recentAmounts.map((amount) => ({ id: Number(amount), label: `৳${amount}` }))}
+            selectedId={Number(watch('amount'))}
+            onSelect={(id) => setValue('amount', `${id}`, { shouldValidate: true })}
+          />
+        ) : null}
+      </Card>
       <Controller control={control} name="transactionDate" render={({ field }) => (
         <DatePickerField label="Date" value={field.value} onChange={field.onChange} error={errors.transactionDate?.message} />
       )} />
@@ -213,6 +254,18 @@ export function AddTransactionScreen({ route, navigation }: Props) {
       </Modal>
     </Screen>
   );
+}
+
+function buildFrequentCategoryIds(transactions: Array<{ categoryId: number }>) {
+  const counts = new Map<number, number>();
+  transactions.slice(0, 60).forEach((transaction) => {
+    counts.set(transaction.categoryId, (counts.get(transaction.categoryId) ?? 0) + 1);
+  });
+
+  return Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([id]) => id);
 }
 
 function sortCategoriesByRecent(categories: Category[], recentCategoryIds: number[]) {
@@ -291,6 +344,17 @@ const styles = StyleSheet.create({
   },
   error: {
     color: colors.danger,
+  },
+  entryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  selectedHint: {
+    borderRadius: 999,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
   modalBackdrop: {
     flex: 1,

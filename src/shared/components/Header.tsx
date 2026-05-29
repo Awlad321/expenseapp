@@ -24,7 +24,7 @@ export function Header({ title, subtitle, rightIcon, onRightPress }: HeaderProps
     <View style={styles.header}>
       <View style={styles.copy}>
         <AppText variant="h1">{title}</AppText>
-        {subtitle ? <AppText muted>{subtitle}</AppText> : null}
+        {subtitle ? <AppText variant="small" muted>{subtitle}</AppText> : null}
       </View>
       <View style={styles.actions}>
         <Pressable onPress={toggleTheme} style={[styles.iconButton, { width: layout.iconButtonSize, height: layout.iconButtonSize, borderRadius: layout.iconButtonSize / 2, backgroundColor: theme.colors.surfaceMuted }]}>

@@ -13,8 +13,9 @@ import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
 import { SegmentedControl } from '../../../shared/components/SegmentedControl';
 import { colors, radius, spacing } from '../../../shared/theme/theme';
+import { useTheme } from '../../../shared/theme/ThemeContext';
 import { formatMoney, currentMonth, today } from '../../../shared/utils/format';
-import type { AccountLedger } from '../../../shared/types/api';
+import type { AccountLedger, LedgerReferenceType } from '../../../shared/types/api';
 import { accountService } from '../services/accountService';
 import { useResponsiveLayout } from '../../../shared/layout/responsive';
 
@@ -24,10 +25,12 @@ type LedgerView = 'day' | 'month' | 'year';
 export function AccountLedgerScreen({ route, navigation }: Props) {
   const { accountId, accountName } = route.params;
   const layout = useResponsiveLayout();
+  const theme = useTheme();
   const [items, setItems] = useState<AccountLedger[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useState<LedgerView>('month');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | LedgerReferenceType>('ALL');
   const [selectedDay, setSelectedDay] = useState(today());
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -52,12 +55,19 @@ export function AccountLedgerScreen({ route, navigation }: Props) {
 
   const filteredItems = items.filter((item) => {
     const date = item.createdAt.slice(0, 10);
-    if (view === 'day') return date === selectedDay;
-    if (view === 'month') return date.startsWith(selectedMonth);
-    return date.startsWith(`${selectedYear}`);
+    const matchesView = view === 'day'
+      ? date === selectedDay
+      : view === 'month'
+        ? date.startsWith(selectedMonth)
+        : date.startsWith(`${selectedYear}`);
+
+    return matchesView && (typeFilter === 'ALL' || item.referenceType === typeFilter);
   });
   const totalCredit = filteredItems.filter((item) => item.direction === 'CREDIT').reduce((sum, item) => sum + item.amount, 0);
   const totalDebit = filteredItems.filter((item) => item.direction === 'DEBIT').reduce((sum, item) => sum + item.amount, 0);
+  const chronologicallySorted = [...filteredItems].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const openingBalance = chronologicallySorted[0] ? chronologicallySorted[0].balanceAfter - (chronologicallySorted[0].direction === 'CREDIT' ? chronologicallySorted[0].amount : -chronologicallySorted[0].amount) : 0;
+  const closingBalance = chronologicallySorted.at(-1)?.balanceAfter ?? 0;
   const groups = buildLedgerGroups(filteredItems, view);
 
   return (
@@ -84,11 +94,30 @@ export function AccountLedgerScreen({ route, navigation }: Props) {
         <YearSwitcher year={selectedYear} onChange={setSelectedYear} />
       )}
 
+      <FilterRow
+        title="Type"
+        options={[
+          { label: 'All', value: 'ALL' },
+          { label: 'Income', value: 'INCOME' },
+          { label: 'Expense', value: 'EXPENSE' },
+          { label: 'Transfer', value: 'TRANSFER' },
+          { label: 'Fee', value: 'TRANSFER_FEE' },
+          { label: 'Open', value: 'OPENING_BALANCE' },
+          { label: 'Adjust', value: 'MANUAL_ADJUSTMENT' },
+        ]}
+        value={typeFilter}
+        onChange={(value) => setTypeFilter(value as 'ALL' | LedgerReferenceType)}
+      />
+
       <Card>
         <View style={styles.summaryRow}>
+          <SummaryMetric label="Opening" value={formatMoney(openingBalance)} color={theme.colors.text} />
           <SummaryMetric label="Credit" value={formatMoney(totalCredit)} color={colors.income} />
           <SummaryMetric label="Debit" value={formatMoney(totalDebit)} color={colors.expense} />
+        </View>
+        <View style={[styles.summaryRow, styles.summaryRowSecondary]}>
           <SummaryMetric label="Net" value={formatMoney(totalCredit - totalDebit)} color={totalCredit >= totalDebit ? colors.income : colors.expense} />
+          <SummaryMetric label="Closing" value={formatMoney(closingBalance)} color={theme.colors.accent} />
         </View>
       </Card>
 
@@ -136,6 +165,37 @@ function SummaryMetric({ label, value, color }: { label: string; value: string; 
     <View style={styles.metric}>
       <AppText variant="small" muted>{label}</AppText>
       <AppText style={{ color }}>{value}</AppText>
+    </View>
+  );
+}
+
+function FilterRow({
+  title,
+  options,
+  value,
+  onChange,
+}: {
+  title: string;
+  options: Array<{ label: string; value: string }>;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <View style={styles.filterBlock}>
+      <AppText variant="small" muted>{title}</AppText>
+      <View style={styles.filterChips}>
+        {options.map((option) => (
+          <PrimaryButton
+            key={option.value}
+            compact
+            variant={value === option.value ? 'primary' : 'ghost'}
+            onPress={() => onChange(option.value)}
+            style={styles.filterChip}
+          >
+            {option.label}
+          </PrimaryButton>
+        ))}
+      </View>
     </View>
   );
 }
@@ -215,9 +275,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
+  summaryRowSecondary: {
+    marginTop: spacing.sm,
+  },
   metric: {
     flex: 1,
     gap: spacing.xs,
+  },
+  filterBlock: {
+    gap: spacing.sm,
+  },
+  filterChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  filterChip: {
+    minHeight: 36,
   },
   selectorRow: {
     flexDirection: 'row',

@@ -6,8 +6,8 @@ import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { DashboardStackParamList } from '../../../app/routes/types';
 import { useAuth } from '../../../app/providers/AuthContext';
-import { Card } from '../../../shared/components/Card';
 import { AppText } from '../../../shared/components/AppText';
+import { Card } from '../../../shared/components/Card';
 import { Header } from '../../../shared/components/Header';
 import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
@@ -118,14 +118,15 @@ export function DashboardScreen({ navigation }: Props) {
         </View>
       </LinearGradient>
 
-      <PrimaryButton onPress={() => navigation.getParent()?.navigate('Transactions', { screen: 'AddExpense' })} style={styles.primaryAction}>
-        <View style={styles.primaryActionContent}>
-          <Ionicons name="remove-circle-outline" size={22} color={theme.colors.background} />
-          <AppText variant="body" style={styles.primaryActionText}>Add expense</AppText>
-        </View>
-      </PrimaryButton>
-
       <View style={styles.quickRow}>
+        <QuickAction
+          icon="remove-circle-outline"
+          label="Expense"
+          color={theme.colors.background}
+          backgroundColor={theme.colors.primary}
+          filled
+          onPress={() => navigation.getParent()?.navigate('Transactions', { screen: 'AddExpense' })}
+        />
         <QuickAction icon="add-circle-outline" label="Income" color={theme.colors.income} onPress={() => navigation.getParent()?.navigate('Transactions', { screen: 'AddIncome' })} />
         <QuickAction icon="swap-horizontal-outline" label="Move" color={theme.colors.transfer} onPress={() => navigation.getParent()?.navigate('Transfer', { screen: 'AddTransfer' })} />
       </View>
@@ -147,6 +148,24 @@ export function DashboardScreen({ navigation }: Props) {
             ))}
           </View>
         )}
+      </Card>
+
+      <Card>
+        <SectionHeader title="Cards" action="Open cards" onAction={() => navigation.getParent()?.navigate('Cards', { screen: 'CreditCardsHome' })} />
+        <View style={styles.balanceRow}>
+          <Metric
+            label="Outstanding"
+            value={formatMoney(summary.totalCreditCardDebt ?? 0)}
+            color={theme.colors.expense}
+            backgroundColor={theme.colors.surface}
+          />
+          <Metric
+            label="Remaining limit"
+            value={formatMoney(summary.totalCreditCardRemaining ?? 0)}
+            color={theme.colors.accent}
+            backgroundColor={theme.colors.surface}
+          />
+        </View>
       </Card>
 
       <Card>
@@ -294,12 +313,26 @@ function Metric({ label, value, color, backgroundColor }: { label: string; value
   );
 }
 
-function QuickAction({ icon, label, color, onPress }: { icon: keyof typeof Ionicons.glyphMap; label: string; color: string; onPress: () => void }) {
+function QuickAction({
+  icon,
+  label,
+  color,
+  onPress,
+  filled,
+  backgroundColor,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  color: string;
+  onPress: () => void;
+  filled?: boolean;
+  backgroundColor?: string;
+}) {
   return (
-    <PrimaryButton variant="ghost" onPress={onPress} style={styles.quickButton}>
+    <PrimaryButton variant={filled ? 'primary' : 'ghost'} onPress={onPress} style={[styles.quickButton, filled && backgroundColor ? { backgroundColor } : undefined]}>
       <View style={styles.quickContent}>
         <Ionicons name={icon} size={22} color={color} />
-        <AppText variant="small">{label}</AppText>
+        <AppText variant="small" style={filled ? styles.quickFilledLabel : undefined}>{label}</AppText>
       </View>
     </PrimaryButton>
   );
@@ -389,7 +422,7 @@ function buildRecentFeed(summary: DashboardSummary) {
 
 const styles = StyleSheet.create({
   screen: {
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.lg,
   },
   center: {
     flex: 1,
@@ -469,18 +502,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
   },
-  primaryAction: {
-    minHeight: 58,
-  },
-  primaryActionContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  primaryActionText: {
-    color: colors.background,
-    fontWeight: '800',
-  },
   metric: {
     flex: 1,
     gap: spacing.xs,
@@ -493,12 +514,15 @@ const styles = StyleSheet.create({
   },
   quickButton: {
     flex: 1,
-    minHeight: 60,
-    borderRadius: radius.lg,
+    minHeight: 54,
+    borderRadius: radius.md,
   },
   quickContent: {
     alignItems: 'center',
     gap: spacing.xs,
+  },
+  quickFilledLabel: {
+    color: colors.background,
   },
   listRow: {
     flexDirection: 'row',

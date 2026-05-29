@@ -38,6 +38,8 @@ export function CreditCardsScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState(0);
   const [name, setName] = useState('');
   const [limit, setLimit] = useState('');
+  const [billingDay, setBillingDay] = useState('');
+  const [dueDay, setDueDay] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(today());
   const [note, setNote] = useState('');
@@ -78,6 +80,8 @@ export function CreditCardsScreen() {
     setEditingActivityId(null);
     setName('');
     setLimit('');
+    setBillingDay('');
+    setDueDay('');
     setAmount('');
     setDate(today());
     setNote('');
@@ -85,7 +89,12 @@ export function CreditCardsScreen() {
 
   async function saveCard() {
     try {
-      const payload = { name, creditLimit: Number(limit || 0) };
+      const payload = {
+        name,
+        creditLimit: Number(limit || 0),
+        billingDay: billingDay ? Number(billingDay) : null,
+        dueDay: dueDay ? Number(dueDay) : null,
+      };
       if (editingCardId) {
         await creditCardService.update(editingCardId, payload);
       } else {
@@ -145,6 +154,8 @@ export function CreditCardsScreen() {
     setMode('CARD');
     setName(card.name);
     setLimit(`${card.creditLimit}`);
+    setBillingDay(card.billingDay ? `${card.billingDay}` : '');
+    setDueDay(card.dueDay ? `${card.dueDay}` : '');
     setAmount('');
     setDate(today());
     setNote('');
@@ -168,6 +179,8 @@ export function CreditCardsScreen() {
   }
 
   const totalDebt = cards.reduce((sum, card) => sum + card.outstandingBalance, 0);
+  const totalLimit = cards.reduce((sum, card) => sum + card.creditLimit, 0);
+  const totalRemaining = Math.max(totalLimit - totalDebt, 0);
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
@@ -181,6 +194,11 @@ export function CreditCardsScreen() {
           <View style={[styles.summaryIcon, { width: layout.compact ? 48 : 56, height: layout.compact ? 48 : 56, borderRadius: layout.compact ? 24 : 28, backgroundColor: theme.colors.surfaceMuted }]}>
             <Ionicons name="card-outline" size={28} color={theme.colors.accent} />
           </View>
+        </View>
+        <View style={styles.summaryMetrics}>
+          <Metric label="Available limit" value={formatMoney(totalRemaining)} />
+          <Metric label="Usage" value={`${Math.round((totalDebt / Math.max(totalLimit, 1)) * 100)}%`} />
+          <Metric label="Total limit" value={formatMoney(totalLimit)} />
         </View>
       </Card>
 
@@ -211,6 +229,15 @@ export function CreditCardsScreen() {
             <Metric label="Remaining" value={formatMoney(card.creditLimit - card.outstandingBalance)} />
             <Metric label="Use" value={`${Math.round((card.outstandingBalance / Math.max(card.creditLimit, 1)) * 100)}%`} />
           </View>
+          {(card.billingDay || card.dueDay || lastPayment(card.id, activities)) ? (
+            <View style={styles.metaRow}>
+              {card.billingDay ? <MetaPill label={`Billing ${ordinal(card.billingDay)}`} /> : null}
+              {card.dueDay ? <MetaPill label={`Due ${ordinal(card.dueDay)}`} /> : null}
+              {lastPayment(card.id, activities) ? (
+                <MetaPill label={`Last pay ${formatMoney(lastPayment(card.id, activities)!.amount)}`} />
+              ) : null}
+            </View>
+          ) : null}
           <View style={styles.track}>
             <View style={[styles.fill, { width: `${Math.min((card.outstandingBalance / Math.max(card.creditLimit, 1)) * 100, 100)}%` }]} />
           </View>
@@ -264,6 +291,14 @@ export function CreditCardsScreen() {
               <>
                 <FormInput label="Card name" value={name} onChangeText={setName} />
                 <FormInput label="Credit limit" keyboardType="numeric" value={limit} onChangeText={setLimit} />
+                <View style={styles.inlineFields}>
+                  <View style={styles.inlineField}>
+                    <FormInput label="Billing day" keyboardType="numeric" value={billingDay} onChangeText={setBillingDay} />
+                  </View>
+                  <View style={styles.inlineField}>
+                    <FormInput label="Due day" keyboardType="numeric" value={dueDay} onChangeText={setDueDay} />
+                  </View>
+                </View>
                 <PrimaryButton onPress={saveCard}>{editingCardId ? 'Update Card' : 'Save Card'}</PrimaryButton>
               </>
             ) : mode === 'CATEGORY' ? (
@@ -309,6 +344,27 @@ function Metric({ label, value }: { label: string; value: string }) {
       <AppText>{value}</AppText>
     </View>
   );
+}
+
+function MetaPill({ label }: { label: string }) {
+  return (
+    <View style={styles.metaPill}>
+      <AppText variant="small" muted>{label}</AppText>
+    </View>
+  );
+}
+
+function lastPayment(cardId: number, activities: CreditCardActivity[]) {
+  return activities.find((activity) => activity.cardId === cardId && activity.type === 'PAYMENT');
+}
+
+function ordinal(value: number) {
+  const mod10 = value % 10;
+  const mod100 = value % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${value}st`;
+  if (mod10 === 2 && mod100 !== 12) return `${value}nd`;
+  if (mod10 === 3 && mod100 !== 13) return `${value}rd`;
+  return `${value}th`;
 }
 
 function ChoiceRow({
@@ -365,6 +421,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  summaryMetrics: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -400,6 +460,17 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 8,
     backgroundColor: colors.expense,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  metaPill: {
+    borderRadius: 999,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.surfaceMuted,
   },
   activityRow: {
     flexDirection: 'row',
@@ -468,6 +539,13 @@ const styles = StyleSheet.create({
   },
   actionText: {
     color: colors.primary,
+  },
+  inlineFields: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  inlineField: {
+    flex: 1,
   },
   chips: {
     flexDirection: 'row',

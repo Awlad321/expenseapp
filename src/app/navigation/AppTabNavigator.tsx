@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { AppTabParamList } from '../routes/types';
 import { DashboardNavigator } from './DashboardNavigator';
@@ -26,10 +27,10 @@ export function AppTabNavigator() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const layout = useResponsiveLayout();
-  const bottomInset = Math.max(insets.bottom, 24);
+  const bottomInset = insets.bottom;
   const labels: Record<keyof AppTabParamList, string> = {
     Dashboard: 'Home',
-    Transactions: 'Transactions',
+    Transactions: 'Activity',
     Transfer: 'Move',
     Accounts: 'Accounts',
     Cards: 'Cards',
@@ -43,12 +44,13 @@ export function AppTabNavigator() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: (layout.compact ? 60 : 66) + bottomInset,
-          paddingBottom: bottomInset,
-          paddingTop: layout.compact ? 6 : 8,
+          height: (layout.compact ? 56 : 62) + bottomInset,
+          paddingBottom: bottomInset > 0 ? bottomInset : 8,
+          paddingTop: layout.compact ? 4 : 6,
+          borderTopWidth: StyleSheet.hairlineWidth,
         },
         tabBarItemStyle: {
-          paddingVertical: layout.compact ? 2 : 4,
+          paddingVertical: 0,
         },
         tabBarLabelStyle: {
           fontSize: layout.compact ? 11 : 12,
@@ -57,6 +59,9 @@ export function AppTabNavigator() {
         tabBarLabel: labels[route.name as keyof AppTabParamList],
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textMuted,
+        tabBarIconStyle: {
+          marginTop: 2,
+        },
         tabBarIcon: ({ color, size }) => <Ionicons name={icons[route.name]} color={color} size={size} />,
       })}
     >

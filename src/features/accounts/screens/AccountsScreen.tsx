@@ -45,49 +45,70 @@ export function AccountsScreen({ navigation }: Props) {
   }, []));
 
   const groupedAccounts = useMemo(() => buildAccountGroups(accounts), [accounts]);
+  const totalBalance = groupedAccounts.reduce((sum, group) => sum + group.total, 0);
+  const activeCount = accounts.filter((account) => account.active).length;
 
   return (
     <Screen refreshing={refreshing} onRefresh={refresh}>
       <Header title="Accounts" subtitle="Cash, bank, and wallets" rightIcon="add-outline" onRightPress={() => navigation.navigate('AddEditAccount')} />
       {loading ? <ActivityIndicator color={colors.primary} /> : null}
+      {!loading && accounts.length > 0 ? (
+        <Card>
+          <View style={styles.heroRow}>
+            <View>
+              <AppText variant="small" muted>Usable balance</AppText>
+              <AppText variant="title">{formatMoney(totalBalance)}</AppText>
+            </View>
+            <View style={styles.heroMeta}>
+              <AppText variant="small" muted>{activeCount} active</AppText>
+              <AppText variant="small" muted>{groupedAccounts.length} groups</AppText>
+            </View>
+          </View>
+        </Card>
+      ) : null}
       {!loading && accounts.length === 0 ? (
         <EmptyState icon="wallet-outline" title="No accounts yet" message="Create Cash, Bank, bKash, Nagad, or Rocket sources first." />
       ) : groupedAccounts.map((group) => (
         <View key={group.type} style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <View>
-              <AppText variant="h2">{group.label}</AppText>
-              <AppText variant="small" muted>{group.accounts.length} account{group.accounts.length === 1 ? '' : 's'}</AppText>
+          <Card>
+            <View style={styles.groupCardHeader}>
+              <View style={styles.groupHeaderLeft}>
+                <View style={[styles.groupIcon, { backgroundColor: `${group.color}16` }]}>
+                  <Ionicons name={group.icon} size={18} color={group.color} />
+                </View>
+                <View>
+                  <AppText variant="h2">{group.label}</AppText>
+                  <AppText variant="small" muted>{group.accounts.length} account{group.accounts.length === 1 ? '' : 's'}</AppText>
+                </View>
+              </View>
+              <AppText style={{ color: group.color }}>{formatMoney(group.total)}</AppText>
             </View>
-            <AppText>{formatMoney(group.total)}</AppText>
-          </View>
-          {group.accounts.map((account) => (
-            <Card key={account.id}>
-              <View>
-                <View style={styles.row}>
-                  <View style={styles.left}>
-                    <View style={[styles.icon, { width: layout.compact ? 40 : 44, height: layout.compact ? 40 : 44, borderRadius: layout.compact ? 20 : 22, backgroundColor: theme.colors.surfaceMuted }]}>
-                      <Ionicons name={account.type === 'BANK' ? 'business-outline' : account.type === 'CASH' ? 'cash-outline' : 'wallet-outline'} size={22} color={theme.colors.primary} />
-                    </View>
-                    <View>
-                      <AppText variant="h2">{account.name}</AppText>
-                      <AppText variant="small" muted>{group.label} {account.active ? 'Active' : 'Inactive'}</AppText>
-                    </View>
+            {group.accounts.map((account, index) => (
+              <View key={account.id} style={[styles.accountRow, index > 0 && styles.accountRowBorder, { borderTopColor: theme.colors.border }]}>
+                <View style={styles.left}>
+                  <View style={[styles.icon, { width: layout.compact ? 40 : 44, height: layout.compact ? 40 : 44, borderRadius: layout.compact ? 20 : 22, backgroundColor: theme.colors.surfaceMuted }]}>
+                    <Ionicons name={group.icon} size={20} color={group.color} />
                   </View>
-                  <View style={styles.right}>
-                    <AppText variant="h2">{formatMoney(account.currentBalance)}</AppText>
+                  <View style={styles.copy}>
+                    <AppText>{account.name}</AppText>
+                    <AppText variant="small" muted>{account.active ? 'Active balance source' : 'Inactive balance source'}</AppText>
+                  </View>
+                </View>
+                <View style={styles.right}>
+                  <AppText>{formatMoney(account.currentBalance)}</AppText>
+                  <View style={styles.actions}>
+                    <Pressable onPress={() => navigation.navigate('AccountLedger', { accountId: account.id, accountName: account.name })} style={[styles.ledgerButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+                      <Ionicons name="reader-outline" size={16} color={theme.colors.textMuted} />
+                      <AppText variant="small" muted>Ledger</AppText>
+                    </Pressable>
                     <Pressable onPress={() => navigation.navigate('AddEditAccount', { accountId: account.id })} style={[styles.editButton, { width: layout.compact ? 32 : 34, height: layout.compact ? 32 : 34, borderRadius: layout.compact ? 16 : 17 }]}>
                       <Ionicons name="create-outline" size={18} color={theme.colors.primary} />
                     </Pressable>
                   </View>
                 </View>
-                <Pressable onPress={() => navigation.navigate('AccountLedger', { accountId: account.id, accountName: account.name })} style={styles.ledgerHint}>
-                  <AppText variant="small" muted>View ledger</AppText>
-                  <Ionicons name="chevron-forward" size={16} color={theme.colors.textMuted} />
-                </Pressable>
               </View>
-            </Card>
-          ))}
+            ))}
+          </Card>
         </View>
       ))}
       <PrimaryButton onPress={() => navigation.navigate('AddEditAccount')}>Add Account</PrimaryButton>
@@ -110,6 +131,8 @@ function buildAccountGroups(accounts: Account[]) {
       return {
         type,
         label: labels[type],
+        icon: accountIcon(type),
+        color: accountColor(type),
         accounts: groupAccounts,
         total: groupAccounts.reduce((sum, account) => sum + account.currentBalance, 0),
       };
@@ -117,9 +140,32 @@ function buildAccountGroups(accounts: Account[]) {
     .filter((group) => group.accounts.length > 0);
 }
 
+function accountIcon(type: AccountType): keyof typeof Ionicons.glyphMap {
+  if (type === 'BANK') return 'business-outline';
+  if (type === 'CASH') return 'cash-outline';
+  if (type === 'WALLET') return 'wallet-outline';
+  return 'layers-outline';
+}
+
+function accountColor(type: AccountType) {
+  if (type === 'BANK') return colors.bank;
+  if (type === 'CASH') return colors.cash;
+  if (type === 'WALLET') return colors.wallet;
+  return colors.primary;
+}
+
 const styles = StyleSheet.create({
   section: {
     gap: spacing.sm,
+  },
+  heroRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  heroMeta: {
+    alignItems: 'flex-end',
+    gap: spacing.xs,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -127,15 +173,38 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
   },
-  row: {
+  groupCardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.md,
   },
-  left: {
+  groupHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
+  },
+  groupIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingTop: spacing.md,
+    marginTop: spacing.md,
+  },
+  accountRowBorder: {
+    borderTopWidth: 1,
+  },
+  left: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: spacing.md,
     flex: 1,
   },
@@ -147,10 +216,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ledgerHint: {
+  copy: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    gap: spacing.xs,
+  },
+  ledgerButton: {
+    minHeight: 32,
+    borderRadius: 999,
+    paddingHorizontal: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.xs,
   },
   right: {

@@ -19,26 +19,35 @@ const styles = StyleSheet.create({
   base: {
     color: colors.text,
     letterSpacing: 0,
+    fontFamily: typography.fontFamily,
   },
   title: {
     fontSize: typography.title,
     fontWeight: '800',
+    lineHeight: 36,
+    fontFamily: typography.fontFamilyDisplay,
   },
   h1: {
     fontSize: typography.h1,
     fontWeight: '800',
+    lineHeight: 30,
+    fontFamily: typography.fontFamilyDisplay,
   },
   h2: {
     fontSize: typography.h2,
     fontWeight: '700',
+    lineHeight: 24,
+    fontFamily: typography.fontFamilyDisplay,
   },
   body: {
     fontSize: typography.body,
     fontWeight: '500',
+    lineHeight: 20,
   },
   small: {
     fontSize: typography.small,
     fontWeight: '600',
+    lineHeight: 16,
   },
   muted: {
     color: colors.textMuted,

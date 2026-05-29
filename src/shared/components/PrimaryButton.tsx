@@ -26,6 +26,7 @@ export function PrimaryButton({ children, onPress, loading, disabled, compact, v
         ? theme.colors.danger
         : theme.colors.surfaceMuted;
   const labelColor = variant === 'ghost' ? theme.colors.text : theme.colors.background;
+  const borderColor = variant === 'ghost' ? theme.colors.borderStrong : 'transparent';
 
   return (
     <Pressable
@@ -36,7 +37,7 @@ export function PrimaryButton({ children, onPress, loading, disabled, compact, v
         styles.button,
         { minHeight: compact ? layout.compactButtonHeight : layout.buttonHeight },
         compact && styles.compactButton,
-        { backgroundColor },
+        { backgroundColor, borderColor },
         (loading || disabled) && styles.disabled,
         pressed && styles.pressed,
         style,
@@ -58,6 +59,7 @@ const styles = StyleSheet.create({
   button: {
     minHeight: 52,
     borderRadius: radius.md,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
@@ -67,7 +69,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   pressed: {
-    opacity: 0.82,
+    opacity: 0.88,
   },
   disabled: {
     opacity: 0.52,

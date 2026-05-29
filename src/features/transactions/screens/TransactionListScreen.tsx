@@ -8,6 +8,7 @@ import { AppText } from '../../../shared/components/AppText';
 import { Card } from '../../../shared/components/Card';
 import { DatePickerField } from '../../../shared/components/DatePickerField';
 import { EmptyState } from '../../../shared/components/EmptyState';
+import { FormInput } from '../../../shared/components/FormInput';
 import { Header } from '../../../shared/components/Header';
 import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
@@ -30,6 +31,10 @@ export function TransactionListScreen({ navigation }: Props) {
   const [selectedDate, setSelectedDate] = useState(today());
   const [selectedMonth, setSelectedMonth] = useState(currentMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'INCOME' | 'EXPENSE'>('ALL');
+  const [accountFilter, setAccountFilter] = useState<string>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
 
   async function load() {
     try {
@@ -49,11 +54,29 @@ export function TransactionListScreen({ navigation }: Props) {
     load();
   }, []));
 
+  const accountOptions = useMemo(() => ['ALL', ...Array.from(new Set(items.map((item) => item.accountName))).sort((a, b) => a.localeCompare(b))], [items]);
+  const categoryOptions = useMemo(() => ['ALL', ...Array.from(new Set(items.map((item) => item.categoryName))).sort((a, b) => a.localeCompare(b))], [items]);
+
   const filteredItems = useMemo(() => items.filter((item) => {
-    if (view === 'day') return item.transactionDate === selectedDate;
-    if (view === 'month') return item.transactionDate.startsWith(selectedMonth);
-    return item.transactionDate.startsWith(`${selectedYear}`);
-  }), [items, selectedDate, selectedMonth, selectedYear, view]);
+    const inRange = view === 'day'
+      ? item.transactionDate === selectedDate
+      : view === 'month'
+        ? item.transactionDate.startsWith(selectedMonth)
+        : item.transactionDate.startsWith(`${selectedYear}`);
+    if (!inRange) return false;
+    if (typeFilter !== 'ALL' && item.type !== typeFilter) return false;
+    if (accountFilter !== 'ALL' && item.accountName !== accountFilter) return false;
+    if (categoryFilter !== 'ALL' && item.categoryName !== categoryFilter) return false;
+    const query = search.trim().toLowerCase();
+    if (!query) return true;
+    return [
+      item.categoryName,
+      item.accountName,
+      item.note ?? '',
+      item.amount.toString(),
+      item.transactionDate,
+    ].some((value) => value.toLowerCase().includes(query));
+  }), [accountFilter, categoryFilter, items, search, selectedDate, selectedMonth, selectedYear, typeFilter, view]);
   const totalIncome = filteredItems.filter((item) => item.type === 'INCOME').reduce((sum, item) => sum + item.amount, 0);
   const totalExpense = filteredItems.filter((item) => item.type === 'EXPENSE').reduce((sum, item) => sum + item.amount, 0);
   const net = totalIncome - totalExpense;
@@ -82,6 +105,21 @@ export function TransactionListScreen({ navigation }: Props) {
       ) : (
         <YearSwitcher year={selectedYear} onChange={setSelectedYear} />
       )}
+      <Card>
+        <FormInput label="Search" placeholder="Search note, category, account, or amount" value={search} onChangeText={setSearch} />
+        <SegmentedControl
+          compact
+          options={[
+            { label: 'All', value: 'ALL' },
+            { label: 'Income', value: 'INCOME' },
+            { label: 'Expense', value: 'EXPENSE' },
+          ]}
+          value={typeFilter}
+          onChange={(value) => setTypeFilter(value as 'ALL' | 'INCOME' | 'EXPENSE')}
+        />
+        <FilterRow title="Account" options={accountOptions} value={accountFilter} onChange={setAccountFilter} />
+        <FilterRow title="Category" options={categoryOptions} value={categoryFilter} onChange={setCategoryFilter} />
+      </Card>
       <Card>
         <View style={styles.summaryRow}>
           <SummaryMetric label="Income" value={formatMoney(totalIncome)} color={colors.income} />
@@ -150,6 +188,24 @@ function SummaryMetric({ label, value, color }: { label: string; value: string; 
     <View style={styles.summaryMetric}>
       <AppText variant="small" muted>{label}</AppText>
       <AppText style={{ color }}>{value}</AppText>
+    </View>
+  );
+}
+
+function FilterRow({ title, options, value, onChange }: { title: string; options: string[]; value: string; onChange: (value: string) => void }) {
+  return (
+    <View style={styles.filterBlock}>
+      <AppText variant="small" muted>{title}</AppText>
+      <View style={styles.filterChips}>
+        {options.slice(0, 8).map((option) => {
+          const selected = value === option;
+          return (
+            <PrimaryButton compact key={option} variant={selected ? 'primary' : 'ghost'} onPress={() => onChange(option)} style={styles.filterChip}>
+              {option === 'ALL' ? 'All' : option}
+            </PrimaryButton>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -239,6 +295,17 @@ const styles = StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  filterBlock: {
+    gap: spacing.sm,
+  },
+  filterChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  filterChip: {
+    borderRadius: radius.sm,
   },
   summaryMetric: {
     flex: 1,

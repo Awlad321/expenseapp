@@ -293,9 +293,20 @@ export function ManageCategoriesScreen({ route, navigation }: Props) {
 }
 
 function Tag({ label }: { label: string }) {
+  const palette = label === 'Default'
+    ? { backgroundColor: 'rgba(37,99,235,0.10)', color: colors.accent }
+    : label === 'Archived'
+      ? { backgroundColor: 'rgba(148,163,184,0.18)', color: colors.textMuted }
+      : label === 'FIXED'
+        ? { backgroundColor: 'rgba(220,38,38,0.12)', color: colors.expense }
+        : label === 'ESSENTIAL'
+          ? { backgroundColor: 'rgba(37,99,235,0.10)', color: colors.accent }
+          : label === 'DISCRETIONARY'
+            ? { backgroundColor: 'rgba(245,158,11,0.12)', color: colors.cash }
+            : { backgroundColor: colors.surfaceMuted, color: colors.textMuted };
   return (
-    <View style={styles.tag}>
-      <AppText variant="small" muted>{label}</AppText>
+    <View style={[styles.tag, { backgroundColor: palette.backgroundColor }]}>
+      <AppText variant="small" style={{ color: palette.color }}>{label}</AppText>
     </View>
   );
 }
