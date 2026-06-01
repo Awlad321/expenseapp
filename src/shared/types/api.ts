@@ -5,7 +5,10 @@ export type TransactionType = 'INCOME' | 'EXPENSE';
 export type LedgerDirection = 'CREDIT' | 'DEBIT';
 export type LedgerReferenceType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TRANSFER_FEE' | 'OPENING_BALANCE' | 'MANUAL_ADJUSTMENT';
 export type CreditCardActivityType = 'SPEND' | 'PAYMENT' | 'ADJUSTMENT';
+export type CreditCardEmiStatus = 'ACTIVE' | 'PARTIALLY_PAID' | 'COMPLETED' | 'OVERDUE';
+export type CreditCardEmiMode = 'LIVE' | 'BACKFILL';
 export type DebtStatus = 'ACTIVE' | 'PARTIALLY_PAID' | 'FULLY_PAID' | 'OVERDUE';
+export type DebtKind = 'BORROWED' | 'LENT';
 
 export interface User {
   id: number;
@@ -73,9 +76,48 @@ export interface CreditCardActivity {
   createdAt: string;
 }
 
+export interface CreditCardEmi {
+  id: number;
+  cardId: number;
+  cardName: string;
+  title: string;
+  merchantName?: string | null;
+  originalAmount: number;
+  installmentAmount: number;
+  totalInstallments: number;
+  paidInstallments: number;
+  remainingInstallments: number;
+  totalPaid: number;
+  remainingAmount: number;
+  progressPercent: number;
+  mode: CreditCardEmiMode;
+  startDate: string;
+  dueDate?: string | null;
+  note?: string | null;
+  status: CreditCardEmiStatus;
+  lastPaymentDate?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreditCardEmiPayment {
+  id: number;
+  emiId: number;
+  cardId: number;
+  amount: number;
+  affectsOutstanding: boolean;
+  paymentDate: string;
+  note?: string | null;
+  remainingAfter: number;
+  remainingInstallmentsAfter: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Debt {
   id: number;
   userId: number;
+  kind: DebtKind;
   personName: string;
   phoneNumber?: string | null;
   description?: string | null;

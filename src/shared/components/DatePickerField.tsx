@@ -216,7 +216,9 @@ const styles = StyleSheet.create({
     rowGap: spacing.sm,
   },
   day: {
-    width: `${100 / 7}%`,
+    width: '14.2857%',
+    minWidth: '14.2857%',
+    maxWidth: '14.2857%',
     aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',

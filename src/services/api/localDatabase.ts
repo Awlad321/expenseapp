@@ -9,8 +9,13 @@ import type {
   CategoryType,
   CreditCard,
   CreditCardActivity,
+  CreditCardEmi,
+  CreditCardEmiMode,
+  CreditCardEmiPayment,
+  CreditCardEmiStatus,
   DashboardSummary,
   Debt,
+  DebtKind,
   DebtPayment,
   DebtStatus,
   LedgerDirection,
@@ -35,6 +40,8 @@ interface LocalDatabase {
   ledger: AccountLedger[];
   creditCards: CreditCard[];
   creditCardActivities: CreditCardActivity[];
+  creditCardEmis: CreditCardEmi[];
+  creditCardEmiPayments: CreditCardEmiPayment[];
   debts: Debt[];
   debtPayments: DebtPayment[];
 }
@@ -100,7 +107,29 @@ export interface CreditCardPaymentPayload {
   note?: string;
 }
 
+export interface CreditCardEmiPayload {
+  cardId: number;
+  mode: CreditCardEmiMode;
+  title: string;
+  merchantName?: string;
+  originalAmount: number;
+  installmentAmount: number;
+  totalInstallments: number;
+  startDate: string;
+  dueDate?: string;
+  note?: string;
+}
+
+export interface CreditCardEmiPaymentPayload {
+  emiId: number;
+  amount: number;
+  affectsOutstanding: boolean;
+  paymentDate: string;
+  note?: string;
+}
+
 export interface DebtPayload {
+  kind: DebtKind;
   personName: string;
   phoneNumber?: string;
   description?: string;
@@ -127,14 +156,8 @@ const defaultCategories: Array<Pick<Category, 'name' | 'type' | 'defaultCategory
   { name: 'Gift', type: 'INCOME', defaultCategory: true },
   { name: 'Other', type: 'INCOME', defaultCategory: true },
   { name: 'Bills', type: 'EXPENSE', defaultCategory: true },
-  { name: 'Basha', type: 'EXPENSE', defaultCategory: true },
   { name: 'Loan', type: 'EXPENSE', defaultCategory: true },
   { name: 'DPS', type: 'EXPENSE', defaultCategory: true },
-  { name: 'Metro', type: 'EXPENSE', defaultCategory: true },
-  { name: 'Protiva', type: 'EXPENSE', defaultCategory: true },
-  { name: 'EBL CC', type: 'EXPENSE', defaultCategory: true },
-  { name: 'Abbu', type: 'EXPENSE', defaultCategory: true },
-  { name: 'Bkash loan', type: 'EXPENSE', defaultCategory: true },
   { name: 'Grocery', type: 'EXPENSE', defaultCategory: true },
 ];
 
@@ -438,7 +461,7 @@ export const localDatabase = {
 
   async listCreditCards() {
     const db = await readDb();
-    return [...db.creditCards].sort((a, b) => a.name.localeCompare(b.name));
+    return db.creditCards.filter((card) => card.active).sort((a, b) => a.name.localeCompare(b.name));
   },
 
   async createCreditCard(payload: CreditCardPayload) {
@@ -487,8 +510,25 @@ export const localDatabase = {
           activity.cardName = card.name;
         }
       });
+      db.creditCardEmis.forEach((emi) => {
+        if (emi.cardId === card.id) {
+          emi.cardName = card.name;
+        }
+      });
 
       return card;
+    });
+  },
+
+  async deleteCreditCard(id: number) {
+    return mutateDb((db) => {
+      const card = getCreditCard(db, id);
+      if (card.outstandingBalance > 0) {
+        throw new Error('Clear outstanding balance before deleting the card');
+      }
+      card.active = false;
+      card.updatedAt = now();
+      return true;
     });
   },
 
@@ -611,6 +651,217 @@ export const localDatabase = {
       .sort((a, b) => b.activityDate.localeCompare(a.activityDate) || b.createdAt.localeCompare(a.createdAt));
   },
 
+  async listCreditCardEmis(cardId?: number) {
+    const db = await readDb();
+    return db.creditCardEmis
+      .filter((emi) => !cardId || emi.cardId === cardId)
+      .sort((a, b) => {
+        const statusOrder = emiStatusRank(a.status) - emiStatusRank(b.status);
+        if (statusOrder !== 0) return statusOrder;
+        return a.title.localeCompare(b.title);
+      });
+  },
+
+  async createCreditCardEmi(payload: CreditCardEmiPayload) {
+    return mutateDb((db) => {
+      const card = getCreditCard(db, payload.cardId);
+      const title = requiredName(payload.title, 'EMI title');
+      const originalAmount = positive(payload.originalAmount);
+      const installmentAmount = positive(payload.installmentAmount);
+      const totalInstallments = wholePositive(payload.totalInstallments, 'Total EMI count');
+      if (installmentAmount - originalAmount > 0.001) {
+        throw new Error('Installment amount cannot exceed original amount');
+      }
+      if (totalInstallments > 1 && installmentAmount >= originalAmount) {
+        throw new Error('Installment amount looks incorrect for multiple EMIs');
+      }
+      const emi: CreditCardEmi = {
+        id: nextId(db),
+        cardId: card.id,
+        cardName: card.name,
+        mode: payload.mode === 'BACKFILL' ? 'BACKFILL' : 'LIVE',
+        title,
+        merchantName: optionalText(payload.merchantName),
+        originalAmount,
+        installmentAmount,
+        totalInstallments,
+        paidInstallments: 0,
+        remainingInstallments: totalInstallments,
+        totalPaid: 0,
+        remainingAmount: originalAmount,
+        progressPercent: 0,
+        startDate: validDate(payload.startDate),
+        dueDate: optionalDate(payload.dueDate),
+        note: optionalText(payload.note),
+        status: 'ACTIVE',
+        lastPaymentDate: null,
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      if (emi.mode === 'LIVE') {
+        card.outstandingBalance = money(card.outstandingBalance + originalAmount);
+        card.updatedAt = now();
+      }
+      db.creditCardEmis.push(emi);
+      return emi;
+    });
+  },
+
+  async updateCreditCardEmi(id: number, payload: CreditCardEmiPayload) {
+    return mutateDb((db) => {
+      const emi = getCreditCardEmiById(db, id);
+      const oldCard = getCreditCard(db, emi.cardId);
+      if (emi.mode === 'LIVE') {
+        oldCard.outstandingBalance = money(oldCard.outstandingBalance - emi.remainingAmount);
+        oldCard.updatedAt = now();
+      }
+
+      const nextCard = getCreditCard(db, payload.cardId);
+      const title = requiredName(payload.title, 'EMI title');
+      const originalAmount = positive(payload.originalAmount);
+      const installmentAmount = positive(payload.installmentAmount);
+      const totalInstallments = wholePositive(payload.totalInstallments, 'Total EMI count');
+      if (installmentAmount - originalAmount > 0.001) {
+        throw new Error('Installment amount cannot exceed original amount');
+      }
+      if (totalInstallments > 1 && installmentAmount >= originalAmount) {
+        throw new Error('Installment amount looks incorrect for multiple EMIs');
+      }
+
+      emi.cardId = nextCard.id;
+      emi.cardName = nextCard.name;
+      emi.mode = payload.mode === 'BACKFILL' ? 'BACKFILL' : 'LIVE';
+      emi.title = title;
+      emi.merchantName = optionalText(payload.merchantName);
+      emi.originalAmount = originalAmount;
+      emi.installmentAmount = installmentAmount;
+      emi.totalInstallments = totalInstallments;
+      emi.startDate = validDate(payload.startDate);
+      emi.dueDate = optionalDate(payload.dueDate);
+      emi.note = optionalText(payload.note);
+      recalculateCreditCardEmi(db, emi.id, true);
+
+      if (emi.mode === 'LIVE') {
+        nextCard.outstandingBalance = money(nextCard.outstandingBalance + emi.remainingAmount);
+        nextCard.updatedAt = now();
+      }
+
+      db.creditCardEmiPayments.forEach((payment) => {
+        if (payment.emiId === emi.id) {
+          payment.cardId = nextCard.id;
+          payment.updatedAt = now();
+        }
+      });
+      return emi;
+    });
+  },
+
+  async deleteCreditCardEmi(id: number) {
+    return mutateDb((db) => {
+      const emi = getCreditCardEmiById(db, id);
+      const card = getCreditCard(db, emi.cardId);
+      if (emi.mode === 'LIVE') {
+        card.outstandingBalance = money(card.outstandingBalance - emi.remainingAmount);
+        card.updatedAt = now();
+      }
+      db.creditCardEmiPayments = db.creditCardEmiPayments.filter((payment) => payment.emiId !== emi.id);
+      db.creditCardEmis = db.creditCardEmis.filter((item) => item.id !== emi.id);
+      return true;
+    });
+  },
+
+  async listCreditCardEmiPayments(emiId?: number) {
+    const db = await readDb();
+    return db.creditCardEmiPayments
+      .filter((payment) => !emiId || payment.emiId === emiId)
+      .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate) || b.createdAt.localeCompare(a.createdAt));
+  },
+
+  async addCreditCardEmiPayment(payload: CreditCardEmiPaymentPayload) {
+    return mutateDb((db) => {
+      const emi = getCreditCardEmiById(db, payload.emiId);
+      const card = getCreditCard(db, emi.cardId);
+      const amount = positive(payload.amount);
+      if (amount - emi.remainingAmount > 0.001) {
+        throw new Error('Payment cannot exceed remaining EMI amount');
+      }
+      if (payload.affectsOutstanding) {
+        card.outstandingBalance = money(card.outstandingBalance - amount);
+        card.updatedAt = now();
+      }
+      const payment: CreditCardEmiPayment = {
+        id: nextId(db),
+        emiId: emi.id,
+        cardId: card.id,
+        amount,
+        affectsOutstanding: payload.affectsOutstanding,
+        paymentDate: validDate(payload.paymentDate),
+        note: optionalText(payload.note),
+        remainingAfter: 0,
+        remainingInstallmentsAfter: 0,
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      db.creditCardEmiPayments.push(payment);
+      recalculateCreditCardEmi(db, emi.id, true);
+      return payment;
+    });
+  },
+
+  async updateCreditCardEmiPayment(id: number, payload: CreditCardEmiPaymentPayload) {
+    return mutateDb((db) => {
+      const payment = getCreditCardEmiPaymentById(db, id);
+      const oldEmi = getCreditCardEmiById(db, payment.emiId);
+      const oldCard = getCreditCard(db, payment.cardId);
+      const previousAmount = payment.amount;
+      if (payment.affectsOutstanding) {
+        oldCard.outstandingBalance = money(oldCard.outstandingBalance + payment.amount);
+        oldCard.updatedAt = now();
+      }
+
+      recalculateCreditCardEmi(db, oldEmi.id);
+
+      payment.emiId = payload.emiId;
+      payment.paymentDate = validDate(payload.paymentDate);
+      payment.amount = positive(payload.amount);
+      payment.affectsOutstanding = payload.affectsOutstanding;
+      payment.note = optionalText(payload.note);
+
+      const nextEmi = getCreditCardEmiById(db, payload.emiId);
+      const nextCard = getCreditCard(db, nextEmi.cardId);
+      const allowedRemaining = nextEmi.id === oldEmi.id
+        ? money(nextEmi.remainingAmount + previousAmount)
+        : nextEmi.remainingAmount;
+      if (payment.amount - allowedRemaining > 0.001) {
+        throw new Error('Payment cannot exceed remaining EMI amount');
+      }
+      payment.cardId = nextCard.id;
+      if (payment.affectsOutstanding) {
+        nextCard.outstandingBalance = money(nextCard.outstandingBalance - payment.amount);
+        nextCard.updatedAt = now();
+      }
+
+      recalculateCreditCardEmi(db, oldEmi.id, true);
+      if (nextEmi.id !== oldEmi.id) recalculateCreditCardEmi(db, nextEmi.id, true);
+      return payment;
+    });
+  },
+
+  async deleteCreditCardEmiPayment(id: number) {
+    return mutateDb((db) => {
+      const payment = getCreditCardEmiPaymentById(db, id);
+      const emi = getCreditCardEmiById(db, payment.emiId);
+      const card = getCreditCard(db, payment.cardId);
+      if (payment.affectsOutstanding) {
+        card.outstandingBalance = money(card.outstandingBalance + payment.amount);
+        card.updatedAt = now();
+      }
+      db.creditCardEmiPayments = db.creditCardEmiPayments.filter((item) => item.id !== id);
+      recalculateCreditCardEmi(db, emi.id, true);
+      return true;
+    });
+  },
+
   async listDebts() {
     const db = await readDb();
     return [...db.debts].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt) || a.personName.localeCompare(b.personName));
@@ -628,6 +879,7 @@ export const localDatabase = {
       const debt: Debt = {
         id: nextId(db),
         userId: 1,
+        kind: payload.kind,
         personName: requiredName(payload.personName, 'Person name'),
         phoneNumber: optionalText(payload.phoneNumber),
         description: optionalText(payload.description),
@@ -652,6 +904,7 @@ export const localDatabase = {
   async updateDebt(id: number, payload: DebtPayload) {
     return mutateDb((db) => {
       const debt = getDebtById(db, id);
+      debt.kind = payload.kind;
       debt.personName = requiredName(payload.personName, 'Person name');
       debt.phoneNumber = optionalText(payload.phoneNumber);
       debt.description = optionalText(payload.description);
@@ -996,6 +1249,8 @@ function createEmptyDb(): LocalDatabase {
     ledger: [],
     creditCards: [],
     creditCardActivities: [],
+    creditCardEmis: [],
+    creditCardEmiPayments: [],
     debts: [],
     debtPayments: [],
   };
@@ -1012,10 +1267,23 @@ function normalizeDb(db: LocalDatabase): LocalDatabase {
     ledger: db.ledger ?? [],
     creditCards: db.creditCards ?? [],
     creditCardActivities: db.creditCardActivities ?? [],
-    debts: db.debts ?? [],
+    creditCardEmis: db.creditCardEmis ?? [],
+    creditCardEmiPayments: (db.creditCardEmiPayments ?? []).map((payment): CreditCardEmiPayment => ({
+      ...payment,
+      affectsOutstanding: payment.affectsOutstanding ?? true,
+    })),
+    debts: (db.debts ?? []).map((debt): Debt => ({
+      ...debt,
+      kind: debt.kind === 'LENT' ? 'LENT' : 'BORROWED',
+    })),
     debtPayments: db.debtPayments ?? [],
   };
   normalized.nextId = Math.max(normalized.nextId ?? 1, maxExistingId(normalized) + 1);
+  normalized.creditCardEmis = normalized.creditCardEmis.map((emi): CreditCardEmi => ({
+    ...emi,
+    mode: emi.mode === 'BACKFILL' ? 'BACKFILL' : 'LIVE',
+  }));
+  normalized.creditCardEmis.forEach((emi) => recalculateCreditCardEmi(normalized, emi.id));
   normalized.debts.forEach((debt) => recalculateDebt(normalized, debt.id));
   return normalized;
 }
@@ -1080,6 +1348,8 @@ function maxExistingId(db: LocalDatabase) {
     ...db.ledger.map((item) => item.id),
     ...db.creditCards.map((item) => item.id),
     ...db.creditCardActivities.map((item) => item.id),
+    ...db.creditCardEmis.map((item) => item.id),
+    ...db.creditCardEmiPayments.map((item) => item.id),
     ...db.debts.map((item) => item.id),
     ...db.debtPayments.map((item) => item.id),
   ];
@@ -1122,6 +1392,18 @@ function getCreditCard(db: LocalDatabase, id: number) {
   return card;
 }
 
+function getCreditCardEmiById(db: LocalDatabase, id: number) {
+  const emi = db.creditCardEmis.find((item) => item.id === id);
+  if (!emi) throw new Error('EMI not found');
+  return emi;
+}
+
+function getCreditCardEmiPaymentById(db: LocalDatabase, id: number) {
+  const payment = db.creditCardEmiPayments.find((item) => item.id === id);
+  if (!payment) throw new Error('EMI payment not found');
+  return payment;
+}
+
 function getDebtById(db: LocalDatabase, id: number) {
   const debt = db.debts.find((item) => item.id === id);
   if (!debt) throw new Error('Debt not found');
@@ -1132,6 +1414,60 @@ function getDebtPaymentById(db: LocalDatabase, id: number) {
   const payment = db.debtPayments.find((item) => item.id === id);
   if (!payment) throw new Error('Debt payment not found');
   return payment;
+}
+
+function recalculateCreditCardEmi(db: LocalDatabase, emiId: number, touchUpdatedAt = false) {
+  const emi = getCreditCardEmiById(db, emiId);
+  const installmentUnit = effectiveEmiInstallmentAmount(emi);
+  const payments = db.creditCardEmiPayments
+    .filter((payment) => payment.emiId === emiId)
+    .sort((a, b) => a.paymentDate.localeCompare(b.paymentDate) || a.createdAt.localeCompare(b.createdAt));
+
+  let runningPaid = 0;
+  payments.forEach((payment) => {
+    runningPaid = money(runningPaid + payment.amount);
+    if (runningPaid - emi.originalAmount > 0.001) {
+      throw new Error('EMI payments cannot exceed original amount');
+    }
+    payment.remainingAfter = money(Math.max(emi.originalAmount - runningPaid, 0));
+    payment.remainingInstallmentsAfter = Math.max(
+      emi.totalInstallments - Math.min(emi.totalInstallments, Math.floor(runningPaid / installmentUnit)),
+      0
+    );
+  });
+
+  emi.totalPaid = money(runningPaid);
+  emi.remainingAmount = money(Math.max(emi.originalAmount - runningPaid, 0));
+  emi.paidInstallments = Math.min(emi.totalInstallments, Math.floor(runningPaid / installmentUnit));
+  emi.remainingInstallments = Math.max(emi.totalInstallments - emi.paidInstallments, 0);
+  emi.progressPercent = Math.max(0, Math.min(100, Math.round((emi.totalPaid / Math.max(emi.originalAmount, 1)) * 100)));
+  emi.lastPaymentDate = payments.at(-1)?.paymentDate ?? null;
+  emi.status = resolveCreditCardEmiStatus(emi);
+  if (touchUpdatedAt) {
+    emi.updatedAt = now();
+  }
+}
+
+function resolveCreditCardEmiStatus(emi: CreditCardEmi): CreditCardEmiStatus {
+  if (emi.remainingAmount <= 0 || emi.remainingInstallments <= 0) return 'COMPLETED';
+  if (emi.dueDate && emi.dueDate < todayValue()) return 'OVERDUE';
+  if (emi.totalPaid > 0) return 'PARTIALLY_PAID';
+  return 'ACTIVE';
+}
+
+function effectiveEmiInstallmentAmount(emi: CreditCardEmi) {
+  if (emi.totalInstallments <= 1) return Math.max(money(emi.originalAmount), 0.01);
+  const normalized = Math.max(money(emi.originalAmount / emi.totalInstallments), 0.01);
+  if (emi.installmentAmount <= 0) return normalized;
+  if (emi.installmentAmount >= emi.originalAmount) return normalized;
+  return emi.installmentAmount;
+}
+
+function emiStatusRank(status: CreditCardEmiStatus) {
+  if (status === 'OVERDUE') return 0;
+  if (status === 'ACTIVE') return 1;
+  if (status === 'PARTIALLY_PAID') return 2;
+  return 3;
 }
 
 function recalculateDebt(db: LocalDatabase, debtId: number, touchUpdatedAt = false) {
@@ -1277,6 +1613,14 @@ function positive(value: number) {
   return amount;
 }
 
+function wholePositive(value: number, label: string) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(amount)) {
+    throw new Error(`${label} must be a whole positive number`);
+  }
+  return amount;
+}
+
 function nonNegative(value: number) {
   const amount = money(value);
   if (amount < 0) throw new Error('Amount cannot be negative');
@@ -1318,8 +1662,12 @@ function normalizeCategoryTag(value?: CategoryTag) {
 
 function validDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('Valid date is required');
-  const date = new Date(value);
+  const [year, month, day] = value.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
   if (Number.isNaN(date.getTime())) throw new Error('Valid date is required');
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+    throw new Error('Valid date is required');
+  }
   return value;
 }
 
@@ -1328,7 +1676,8 @@ function now() {
 }
 
 function todayValue() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
 function escapeCsv(value: string) {

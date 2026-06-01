@@ -1,6 +1,7 @@
 import { localDatabase } from '../../../services/api/localDatabase';
 
 export interface DebtPayload {
+  kind: 'BORROWED' | 'LENT';
   personName: string;
   phoneNumber?: string;
   description?: string;

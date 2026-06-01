@@ -10,6 +10,7 @@ import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
 import { today } from '../../../shared/utils/format';
 import { debtService } from '../services/debtService';
+import { SegmentedControl } from '../../../shared/components/SegmentedControl';
 
 type Props = NativeStackScreenProps<DebtsStackParamList, 'AddEditDebt'>;
 
@@ -17,6 +18,7 @@ export function AddEditDebtScreen({ navigation, route }: Props) {
   const debtId = route.params?.debtId;
   const [loading, setLoading] = useState(Boolean(debtId));
   const [saving, setSaving] = useState(false);
+  const [kind, setKind] = useState<'BORROWED' | 'LENT'>('BORROWED');
   const [personName, setPersonName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [description, setDescription] = useState('');
@@ -33,6 +35,7 @@ export function AddEditDebtScreen({ navigation, route }: Props) {
     }
     debtService.get(debtId)
       .then((debt) => {
+        setKind(debt.kind);
         setPersonName(debt.personName);
         setPhoneNumber(debt.phoneNumber ?? '');
         setDescription(debt.description ?? '');
@@ -53,6 +56,7 @@ export function AddEditDebtScreen({ navigation, route }: Props) {
     setSaving(true);
     try {
       const payload = {
+        kind,
         personName,
         phoneNumber,
         description,
@@ -78,15 +82,24 @@ export function AddEditDebtScreen({ navigation, route }: Props) {
   return (
     <Screen>
       <Header title={debtId ? 'Edit debt' : 'Add debt'} subtitle="Personal liability, separate from expenses" rightIcon="arrow-back-outline" onRightPress={() => navigation.goBack()} />
+      <SegmentedControl
+        compact
+        options={[
+          { label: 'I Borrowed', value: 'BORROWED' },
+          { label: 'I Gave', value: 'LENT' },
+        ]}
+        value={kind}
+        onChange={(value) => setKind(value as 'BORROWED' | 'LENT')}
+      />
       <FormInput label="Person name" value={personName} onChangeText={setPersonName} />
       <FormInput label="Phone number" value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" />
       <FormInput label="Description" value={description} onChangeText={setDescription} />
-      <FormInput label="Total borrowed amount" value={totalAmount} onChangeText={setTotalAmount} keyboardType="numeric" />
+      <FormInput label={kind === 'BORROWED' ? 'Total borrowed amount' : 'Total given amount'} value={totalAmount} onChangeText={setTotalAmount} keyboardType="numeric" />
       <DatePickerField label="Borrow date" value={borrowDate} onChange={setBorrowDate} />
       <DatePickerField label="Due date (optional)" value={dueDate} onChange={setDueDate} />
       <FormInput label="Interest note" value={interestNote} onChangeText={setInterestNote} />
       <FormInput label="Tag / category" value={tag} onChangeText={setTag} />
-      <AppText variant="small" muted>Remaining and status are calculated automatically from total borrowed and recorded payments.</AppText>
+      <AppText variant="small" muted>{kind === 'BORROWED' ? 'Remaining debt is calculated from total borrowed minus installment payments.' : 'Remaining receivable is calculated from total given minus amounts collected back.'}</AppText>
       <PrimaryButton loading={saving || loading} disabled={loading} onPress={save}>{debtId ? 'Update Debt' : 'Save Debt'}</PrimaryButton>
     </Screen>
   );

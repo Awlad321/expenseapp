@@ -13,7 +13,7 @@ import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
 import { useTheme } from '../../../shared/theme/ThemeContext';
 import { formatMoney, today } from '../../../shared/utils/format';
-import type { Debt, DebtPayment, DebtStatus } from '../../../shared/types/api';
+import type { Debt, DebtKind, DebtPayment, DebtStatus } from '../../../shared/types/api';
 import { debtService } from '../services/debtService';
 
 type Props = NativeStackScreenProps<DebtsStackParamList, 'DebtDetails'>;
@@ -48,7 +48,7 @@ export function DebtDetailsScreen({ navigation, route }: Props) {
     return [
       {
         key: `borrow-${debt.id}`,
-        title: `Borrowed ${formatMoney(debt.totalAmount)}`,
+        title: `${debt.kind === 'BORROWED' ? 'Borrowed' : 'Gave'} ${formatMoney(debt.totalAmount)}`,
         subtitle: debt.description ?? debt.interestNote ?? 'Debt created',
         date: debt.borrowDate,
         remaining: debt.totalAmount,
@@ -56,8 +56,8 @@ export function DebtDetailsScreen({ navigation, route }: Props) {
       },
       ...payments.map((payment) => ({
         key: `payment-${payment.id}`,
-        title: `Payment ${formatMoney(payment.amount)}`,
-        subtitle: payment.note ?? 'Installment payment',
+        title: `${debt.kind === 'BORROWED' ? 'Payment' : 'Collected'} ${formatMoney(payment.amount)}`,
+        subtitle: payment.note ?? (debt.kind === 'BORROWED' ? 'Installment payment' : 'Money received back'),
         date: payment.paymentDate,
         remaining: payment.remainingAfter,
         type: 'PAYMENT' as const,
@@ -94,7 +94,7 @@ export function DebtDetailsScreen({ navigation, route }: Props) {
       setPaymentModal(false);
       await load();
     } catch {
-      Alert.alert('Could not save payment', 'Check the amount and date. Payments cannot exceed the total borrowed amount.');
+      Alert.alert('Could not save payment', `Check the amount and date. ${debt?.kind === 'BORROWED' ? 'Payments' : 'Collected amounts'} cannot exceed the total amount.`);
     } finally {
       setSaving(false);
     }
@@ -136,26 +136,31 @@ export function DebtDetailsScreen({ navigation, route }: Props) {
     );
   }
 
-  const palette = debtPalette(debt.status, theme.colors);
+  const palette = debtPalette(debt.status, debt.kind, theme.colors);
   const progress = debt.totalAmount > 0 ? Math.min((debt.totalPaid / debt.totalAmount) * 100, 100) : 0;
 
   return (
     <Screen>
-      <Header title={debt.personName} subtitle="Debt ledger and payments" rightIcon="arrow-back-outline" onRightPress={() => navigation.goBack()} />
+      <Header title={debt.personName} subtitle={debt.kind === 'BORROWED' ? 'Borrowed money and payments' : 'Money given and collections'} rightIcon="arrow-back-outline" onRightPress={() => navigation.goBack()} />
       <Card>
         <View style={styles.topRow}>
           <View>
-            <AppText variant="small" muted>Remaining debt</AppText>
+            <AppText variant="small" muted>{debt.kind === 'BORROWED' ? 'Remaining debt' : 'Outstanding receivable'}</AppText>
             <AppText variant="title" style={{ color: palette }}>{formatMoney(debt.remainingAmount)}</AppText>
           </View>
-          <View style={[styles.badge, { backgroundColor: `${palette}15` }]}>
-            <AppText variant="small" style={{ color: palette }}>{statusLabel(debt.status)}</AppText>
+          <View style={styles.badges}>
+            <View style={[styles.kindBadge, { backgroundColor: `${kindColor(debt.kind, theme.colors)}15` }]}>
+              <AppText variant="small" style={{ color: kindColor(debt.kind, theme.colors) }}>{debt.kind === 'BORROWED' ? 'Borrowed' : 'Lent'}</AppText>
+            </View>
+            <View style={[styles.badge, { backgroundColor: `${palette}15` }]}>
+              <AppText variant="small" style={{ color: palette }}>{statusLabel(debt.status)}</AppText>
+            </View>
           </View>
         </View>
         <View style={styles.metricRow}>
-          <Info label="Borrowed" value={formatMoney(debt.totalAmount)} />
-          <Info label="Paid" value={formatMoney(debt.totalPaid)} />
-          <Info label="Last payment" value={debt.lastPaymentDate ?? 'None'} />
+          <Info label={debt.kind === 'BORROWED' ? 'Borrowed' : 'Given'} value={formatMoney(debt.totalAmount)} />
+          <Info label={debt.kind === 'BORROWED' ? 'Paid' : 'Collected'} value={formatMoney(debt.totalPaid)} />
+          <Info label={debt.kind === 'BORROWED' ? 'Last payment' : 'Last collected'} value={debt.lastPaymentDate ?? 'None'} />
         </View>
         <View style={[styles.track, { backgroundColor: theme.colors.surfaceMuted }]}>
           <View style={[styles.fill, { width: `${Math.max(progress, debt.totalPaid > 0 ? 4 : 0)}%`, backgroundColor: palette }]} />
@@ -164,6 +169,7 @@ export function DebtDetailsScreen({ navigation, route }: Props) {
 
       <Card>
         <AppText variant="h2">Debt details</AppText>
+        <InfoRow label="Type" value={debt.kind === 'BORROWED' ? 'Money I borrowed' : 'Money I gave'} />
         <InfoRow label="Phone" value={debt.phoneNumber ?? 'Not added'} />
         <InfoRow label="Borrow date" value={debt.borrowDate} />
         <InfoRow label="Due date" value={debt.dueDate ?? 'No due date'} />
@@ -173,17 +179,17 @@ export function DebtDetailsScreen({ navigation, route }: Props) {
       </Card>
 
       <View style={styles.actions}>
-        <PrimaryButton onPress={openAddPayment} style={styles.action}>Add payment</PrimaryButton>
+        <PrimaryButton onPress={openAddPayment} style={styles.action}>{debt.kind === 'BORROWED' ? 'Add payment' : 'Add collection'}</PrimaryButton>
         <PrimaryButton variant="ghost" onPress={() => navigation.navigate('AddEditDebt', { debtId })} style={styles.action}>Edit debt</PrimaryButton>
       </View>
 
       <Card>
-        <AppText variant="h2">Payment history</AppText>
+        <AppText variant="h2">{debt.kind === 'BORROWED' ? 'Payment history' : 'Collection history'}</AppText>
         {history.map((item) => (
           <View key={item.key} style={styles.historyRow}>
             <View style={styles.historyLeft}>
               <View style={[styles.historyIcon, { backgroundColor: item.type === 'BORROW' ? `${theme.colors.warning}16` : `${theme.colors.income}16` }]}>
-                <Ionicons name={item.type === 'BORROW' ? 'arrow-up-circle-outline' : 'checkmark-circle-outline'} size={18} color={item.type === 'BORROW' ? theme.colors.warning : theme.colors.income} />
+                <Ionicons name={item.type === 'BORROW' ? (debt.kind === 'BORROWED' ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline') : 'checkmark-circle-outline'} size={18} color={item.type === 'BORROW' ? kindColor(debt.kind, theme.colors) : theme.colors.income} />
               </View>
               <View style={styles.historyCopy}>
                 <AppText>{item.title}</AppText>
@@ -215,13 +221,13 @@ export function DebtDetailsScreen({ navigation, route }: Props) {
         <View style={[styles.backdrop, { backgroundColor: theme.scheme === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(7,17,19,0.28)' }]}>
           <View style={[styles.panel, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
             <View style={styles.modalHeader}>
-              <AppText variant="h2">{editingPaymentId ? 'Edit payment' : 'Add payment'}</AppText>
+              <AppText variant="h2">{editingPaymentId ? `Edit ${debt.kind === 'BORROWED' ? 'payment' : 'collection'}` : `Add ${debt.kind === 'BORROWED' ? 'payment' : 'collection'}`}</AppText>
               <Pressable onPress={() => setPaymentModal(false)}><AppText variant="small" muted>Close</AppText></Pressable>
             </View>
-            <FormInput label="Payment amount" value={amount} onChangeText={setAmount} keyboardType="numeric" />
-            <DatePickerField label="Payment date" value={paymentDate} onChange={setPaymentDate} />
-            <FormInput label="Payment note" value={note} onChangeText={setNote} />
-            <PrimaryButton loading={saving} onPress={savePayment}>{editingPaymentId ? 'Update Payment' : 'Save Payment'}</PrimaryButton>
+            <FormInput label={debt.kind === 'BORROWED' ? 'Payment amount' : 'Collected amount'} value={amount} onChangeText={setAmount} keyboardType="numeric" />
+            <DatePickerField label={debt.kind === 'BORROWED' ? 'Payment date' : 'Collection date'} value={paymentDate} onChange={setPaymentDate} />
+            <FormInput label={debt.kind === 'BORROWED' ? 'Payment note' : 'Collection note'} value={note} onChangeText={setNote} />
+            <PrimaryButton loading={saving} onPress={savePayment}>{editingPaymentId ? `Update ${debt.kind === 'BORROWED' ? 'Payment' : 'Collection'}` : `Save ${debt.kind === 'BORROWED' ? 'Payment' : 'Collection'}`}</PrimaryButton>
           </View>
         </View>
       </Modal>
@@ -253,11 +259,16 @@ function statusLabel(status: DebtStatus) {
   return status.charAt(0) + status.slice(1).toLowerCase();
 }
 
-function debtPalette(status: DebtStatus, palette: ReturnType<typeof useTheme>['colors']) {
+function debtPalette(status: DebtStatus, kind: DebtKind, palette: ReturnType<typeof useTheme>['colors']) {
   if (status === 'FULLY_PAID') return palette.income;
   if (status === 'OVERDUE') return palette.expense;
+  if (kind === 'LENT') return palette.accent;
   if (status === 'PARTIALLY_PAID') return palette.warning;
   return palette.warning;
+}
+
+function kindColor(kind: DebtKind, palette: ReturnType<typeof useTheme>['colors']) {
+  return kind === 'LENT' ? palette.accent : palette.warning;
 }
 
 const styles = StyleSheet.create({
@@ -267,6 +278,16 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   badge: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignSelf: 'flex-start',
+  },
+  badges: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  kindBadge: {
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 6,
