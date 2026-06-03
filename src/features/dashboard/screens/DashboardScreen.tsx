@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from '@react-navigation/native';
@@ -8,6 +8,7 @@ import type { DashboardStackParamList } from '../../../app/routes/types';
 import { useAuth } from '../../../app/providers/AuthContext';
 import { AppText } from '../../../shared/components/AppText';
 import { Card } from '../../../shared/components/Card';
+import { FormInput } from '../../../shared/components/FormInput';
 import { Header } from '../../../shared/components/Header';
 import { PrimaryButton } from '../../../shared/components/PrimaryButton';
 import { Screen } from '../../../shared/components/Screen';
@@ -17,6 +18,7 @@ import { currentMonth, formatMoney } from '../../../shared/utils/format';
 import type { DashboardSummary } from '../../../shared/types/api';
 import { dashboardService } from '../services/dashboardService';
 import { useResponsiveLayout } from '../../../shared/layout/responsive';
+import { getDailyBudgetSettings, saveDailyBudgetSettings } from '../services/dailyBudgetSettings';
 
 type Props = NativeStackScreenProps<DashboardStackParamList, 'DashboardHome'>;
 
@@ -46,11 +48,19 @@ export function DashboardScreen({ navigation }: Props) {
   const [summary, setSummary] = useState<DashboardSummary>(fallback);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [dailyBudgetModalVisible, setDailyBudgetModalVisible] = useState(false);
+  const [cycleStartDay, setCycleStartDay] = useState<number | null>(null);
+  const [cycleStartDayInput, setCycleStartDayInput] = useState('');
 
   async function load(month = selectedMonth) {
     try {
-      const data = await dashboardService.summary(month);
+      const [data, budgetSettings] = await Promise.all([
+        dashboardService.summary(month),
+        getDailyBudgetSettings(),
+      ]);
       setSummary(data);
+      setCycleStartDay(budgetSettings.cycleStartDay ?? null);
+      setCycleStartDayInput(budgetSettings.cycleStartDay ? `${budgetSettings.cycleStartDay}` : '');
     } catch {
       setSummary({ ...fallback, month });
     } finally {
@@ -79,6 +89,51 @@ export function DashboardScreen({ navigation }: Props) {
     setPickerYear(Number(selectedMonth.slice(0, 4)));
     setMonthPickerVisible(true);
   }
+
+  function openDailyBudgetSettings() {
+    setCycleStartDayInput(cycleStartDay ? `${cycleStartDay}` : '');
+    setDailyBudgetModalVisible(true);
+  }
+
+  async function saveDailyBudget() {
+    const nextDay = Number(cycleStartDayInput);
+    if (!Number.isInteger(nextDay) || nextDay < 1 || nextDay > 31) {
+      Alert.alert('Invalid cycle day', 'Enter a day between 1 and 31.');
+      return;
+    }
+    await saveDailyBudgetSettings(nextDay);
+    setCycleStartDay(nextDay);
+    setDailyBudgetModalVisible(false);
+  }
+
+  const dailyBudget = useMemo(() => {
+    if (!cycleStartDay) {
+      return null;
+    }
+    const daysLeft = getDaysLeftInCycle(cycleStartDay, new Date());
+    if (!daysLeft || daysLeft < 1) {
+      return null;
+    }
+    return (summary.remainingBalance ?? summary.totalBalance) / daysLeft;
+  }, [cycleStartDay, summary.remainingBalance, summary.totalBalance]);
+  const dailyBudgetWarning = useMemo(() => {
+    if (dailyBudget === null) {
+      return null;
+    }
+    const todayExpense = summary.todayExpense ?? 0;
+    if (dailyBudget <= 0) {
+      return todayExpense > 0 ? 'Today is running on financial fumes.' : 'Budget is already below zero. Easy does it.';
+    }
+    if (todayExpense <= 0) {
+      return 'No damage yet. Wallet is still calm.';
+    }
+    const ratio = todayExpense / dailyBudget;
+    if (ratio < 0.5) return 'Comfortable pace. No wallet panic today.';
+    if (ratio < 1) return 'You are on budget. Try not to freestyle it.';
+    if (ratio < 1.25) return 'Budget cracked a little. Maybe no bonus snacks.';
+    if (ratio < 1.75) return 'Today spent is outrunning the plan.';
+    return 'Budget is in trouble. Wallet needs adult supervision.';
+  }, [dailyBudget, summary.todayExpense]);
 
   if (loading) {
     return (
@@ -115,6 +170,16 @@ export function DashboardScreen({ navigation }: Props) {
         <View style={styles.balanceRow}>
           <Metric label="Today's Expense" value={formatMoney(summary.todayExpense ?? 0)} color={theme.colors.expense} backgroundColor={theme.scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)'} />
           <Metric label="Remaining" value={formatMoney(summary.remainingBalance ?? summary.totalBalance)} color={theme.colors.accent} backgroundColor={theme.scheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.72)'} />
+        </View>
+        <View style={styles.dailyBudgetRow}>
+          <View style={styles.dailyBudgetLabelRow}>
+            <AppText variant="small" style={{ color: theme.scheme === 'dark' ? 'rgba(244,251,248,0.74)' : theme.colors.textMuted }}>Daily Budget</AppText>
+            <Pressable onPress={openDailyBudgetSettings} hitSlop={8} style={[styles.dailyBudgetIcon, { backgroundColor: theme.scheme === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.72)' }]}>
+              <Ionicons name="settings-outline" size={14} color={theme.colors.text} />
+            </Pressable>
+          </View>
+          <AppText>{dailyBudget === null ? 'Set cycle date' : `${formatMoney(dailyBudget)} / day`}</AppText>
+          {dailyBudgetWarning ? <AppText variant="small" muted>{dailyBudgetWarning}</AppText> : null}
         </View>
       </LinearGradient>
 
@@ -273,6 +338,29 @@ export function DashboardScreen({ navigation }: Props) {
           </View>
         </View>
       </Modal>
+      <Modal visible={dailyBudgetModalVisible} transparent animationType="fade" onRequestClose={() => setDailyBudgetModalVisible(false)}>
+        <View style={[styles.backdrop, { backgroundColor: theme.scheme === 'dark' ? 'rgba(0,0,0,0.52)' : 'rgba(7,17,19,0.28)' }]}>
+          <View style={[styles.monthPanel, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <AppText variant="h2">Daily Budget Settings</AppText>
+            <FormInput
+              label="Financial Cycle Start Day"
+              keyboardType="numeric"
+              value={cycleStartDayInput}
+              onChangeText={setCycleStartDayInput}
+              placeholder="1-31"
+            />
+            <AppText variant="small" muted>Example: If salary comes on 23rd, set 23.</AppText>
+            <View style={styles.monthPickerActions}>
+              <Pressable onPress={() => setDailyBudgetModalVisible(false)} style={[styles.monthActionButton, { backgroundColor: theme.colors.surfaceMuted }]}>
+                <AppText variant="small">Cancel</AppText>
+              </Pressable>
+              <Pressable onPress={saveDailyBudget} style={[styles.monthActionButton, { backgroundColor: theme.colors.primary }]}>
+                <AppText variant="small" style={{ color: theme.colors.background }}>Save</AppText>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -420,6 +508,32 @@ function buildRecentFeed(summary: DashboardSummary) {
     .slice(0, 6);
 }
 
+function getDaysLeftInCycle(cycleStartDay: number, now: Date) {
+  if (!Number.isInteger(cycleStartDay) || cycleStartDay < 1 || cycleStartDay > 31) {
+    return null;
+  }
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const currentMonthCycleDate = new Date(today.getFullYear(), today.getMonth(), clampDayForMonth(today.getFullYear(), today.getMonth(), cycleStartDay));
+  let nextCycleDate: Date;
+  if (today.getTime() < currentMonthCycleDate.getTime()) {
+    nextCycleDate = currentMonthCycleDate;
+  } else {
+    nextCycleDate = new Date(
+      today.getFullYear(),
+      today.getMonth() + 1,
+      clampDayForMonth(today.getFullYear(), today.getMonth() + 1, cycleStartDay),
+    );
+  }
+  const diffMs = nextCycleDate.getTime() - today.getTime();
+  const days = Math.max(Math.round(diffMs / 86400000), 1);
+  return days;
+}
+
+function clampDayForMonth(year: number, monthIndex: number, day: number) {
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  return Math.min(day, lastDay);
+}
+
 const styles = StyleSheet.create({
   screen: {
     paddingBottom: spacing.lg,
@@ -501,6 +615,21 @@ const styles = StyleSheet.create({
   balanceRow: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  dailyBudgetRow: {
+    gap: spacing.xs,
+  },
+  dailyBudgetLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  dailyBudgetIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   metric: {
     flex: 1,
